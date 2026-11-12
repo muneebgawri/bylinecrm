@@ -27,12 +27,16 @@ A scheduled send is judged at its time, not at its request (the day it counts ag
 | Setting                  | Default       | Bounds         | Why                                                                                                                           |
 | ------------------------ | ------------- | -------------- | ----------------------------------------------------------------------------------------------------------------------------- |
 | `dailyNewRecipients`     | 50            | 1–2000         | Industry norm for one inbox's cold mail is 50–100/day; Google's hard limit (2,000) is far past where reputation suffers.      |
-| `hourlyNewRecipients`    | 20            | 1–500, ≤ daily | Spreads a day's budget; bursts look automated.                                                                                |
+| `hourlyNewRecipients`    | 35            | 1–500, ≤ daily | Spreads a day's budget; bursts look automated.                                                                                |
 | `poolHourlyCap`          | 12            | 1–500          | Matches the pool's 60–300 s jitter (~12–60/h); stops a backlog draining in one hour.                                          |
 | `nearDuplicateThreshold` | 10            | 2–1000         | Spec: the 11th near-identical 1:1 message of the day is refused.                                                              |
 | `nearDuplicateDistance`  | 3 bits of 64  | 0–16           | Spec; templated mail with names/links/numbers swapped lands within 0–3 bits.                                                  |
 | `subjectRepeatThreshold` | 10            | 2–1000         | Spec; kept separate from the body rule so each is tunable.                                                                    |
 | `primaryDomain`          | null (derive) | a domain       | Override of the derived primary domain (members' sign-in domain); `effectivePrimaryDomain` in the API shows the one in force. |
+
+The two new-recipient budgets count first emails only. A reply is never counted; a queued follow-up is not
+counted either and is not held to them (its person was a new recipient once, when the first email went) — it is
+still held to a pause and to the repetition rules.
 
 Reading the thresholds needs `guardrail:review`; changing them `workspace:admin`.
 

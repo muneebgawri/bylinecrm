@@ -19,6 +19,20 @@ describe('FR-CRMS-15 the email-addresses source', () => {
         expect(isFreeMailDomain('acme.example')).toBe(false);
     });
 
+    it('knows the consumer mailboxes a provider hands out, by their exact domain', () => {
+        for (const domain of ['comcast.net', 'verizon.net', 'btinternet.com', 'qq.com', '163.com', 'naver.com']) {
+            expect(isFreeMailDomain(domain), domain).toBe(true);
+        }
+        // A service's relay addresses are its customers', not one company's.
+        for (const domain of ['intercom-mail.com', 'hubspotemail.net', 'onmicrosoft.com']) {
+            expect(isFreeMailDomain(domain), domain).toBe(true);
+        }
+        // The provider's own staff write from another domain: that one is a company's.
+        for (const domain of ['verizon.com', 'comcast.com', 'att.com', 'cox.com']) {
+            expect(isFreeMailDomain(domain), domain).toBe(false);
+        }
+    });
+
     it('reads the company domain a person’s address is at, and none at free mail', () => {
         expect(companyDomainOfAddress('Dana@WWW.Acme.example')).toBe('acme.example');
         expect(companyDomainOfAddress('dana@gmail.com')).toBeNull();

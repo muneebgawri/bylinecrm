@@ -39,6 +39,8 @@ export interface PersonalSendCheck {
     recipients: readonly JudgedRecipient[];
     fingerprint: Fingerprint;
     path: Extract<GuardrailPath, 'send' | 'scheduled_send'>;
+    /** A queued follow-up: held to the pause and the repetition rules, not to the new-recipient budgets. */
+    followUp?: boolean;
     /**
      * The moment judged: now, or — a scheduled send at its request — the time it is set to go, so its window is
      * the 24 hours before then, with the sends already set to go in it.
@@ -60,7 +62,8 @@ interface Verdict {
  * leaves — its new-recipient budget for the rolling 24 hours and hour, and the repetition rules (a near-identical
  * body to too many distinct people in 24 hours: "use a sequence from the pool"; the same subject to too many is a
  * warning, once a day, and the send goes). A reply
- * is never judged; a queued follow-up is (it goes as a reply, but nobody wrote to the member). Every refusal is a guardrail event (`blocked`); the first bulk pattern of a member's day tells
+ * is never judged; a queued follow-up is (it goes as a reply, but nobody wrote to the member) — for the pause and
+ * repetition only: the budgets are for first emails, and a follow-up neither spends nor needs one. Every refusal is a guardrail event (`blocked`); the first bulk pattern of a member's day tells
  * the reviewers. The counts include what the mailbox sent outside the CRM (Gmail sync), so a budget spent in
  * Gmail is spent here too. Judged at the send's request — a scheduled send's for the time it is set to go — and,
  * for a scheduled send, again at its time.
@@ -105,10 +108,13 @@ export class ReputationGate {
                 exceptOutboundId: check.sendId,
                 until: now,
             });
-            for (const [window, span, limit] of [
-                ['day', REPUTATION_WINDOW_MS, s.dailyNewRecipients],
-                ['hour', REPUTATION_HOUR_MS, s.hourlyNewRecipients],
-            ] as const) {
+            const budgets = check.followUp
+                ? []
+                : ([
+                      ['day', REPUTATION_WINDOW_MS, s.dailyNewRecipients],
+                      ['hour', REPUTATION_HOUR_MS, s.hourlyNewRecipients],
+                  ] as const);
+            for (const [window, span, limit] of budgets) {
                 const used = recipientsSince(entries, new Date(now.getTime() - span));
                 const adding = mine.filter((a) => !used.has(a)).length;
                 if (used.size + adding > limit) {
@@ -117,7 +123,7 @@ export class ReputationGate {
                         kind: 'send_budget',
                         code: 'mailbox.budget_reached',
                         severity: 'medium',
-                        message: `This mailbox has written to ${used.size} new recipients in the last ${per}; its budget is ${limit}. Replies are not counted — try again later`,
+                        message: `This mailbox has written to ${used.size} new recipients in the last ${per}; its budget is ${limit}. Replies and follow-ups are not counted — try again later`,
                         detail: { window, used: String(used.size), limit: String(limit) },
                     };
                 }

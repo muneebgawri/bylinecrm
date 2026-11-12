@@ -2028,7 +2028,7 @@ model UnsubscribeToken {
 model ReputationSettings {
   workspaceId            String   @id @map("workspace_id") @db.Uuid
   dailyNewRecipients     Int      @default(50) @map("daily_new_recipients")
-  hourlyNewRecipients    Int      @default(20) @map("hourly_new_recipients")
+  hourlyNewRecipients    Int      @default(35) @map("hourly_new_recipients")
   poolHourlyCap          Int      @default(12) @map("pool_hourly_cap")
   nearDuplicateThreshold Int      @default(10) @map("near_duplicate_threshold")
   nearDuplicateDistance  Int      @default(3) @map("near_duplicate_distance")

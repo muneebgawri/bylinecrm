@@ -1,0 +1,232 @@
+import 'reflect-metadata';
+import { type INestApplication } from '@nestjs/common';
+import type { NestExpressApplication } from '@nestjs/platform-express';
+import { Test } from '@nestjs/testing';
+import { CSRF_COOKIE, CSRF_HEADER, SESSION_COOKIE } from '@bylinecrm/shared';
+import request, { type Response } from 'supertest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { APP_OPTIONS, configureApp } from '../../src/app';
+import { AppModule } from '../../src/app.module';
+import { assignDealOwners, TRANSFER_REASON_DEAL_OWNER_FILL } from '../../src/cli/assign-deal-owners';
+import { PAGE_TITLE_NAME, renamePageTitleCompanies } from '../../src/cli/rename-page-title-companies';
+import { PrismaService } from '../../src/infra/prisma.service';
+import { verifyAddress } from '../support/mail';
+
+interface Browser {
+    cookie: string;
+    csrf: string;
+}
+
+function browserFrom(res: Response): Browser {
+    const raw = res.headers['set-cookie'] as string[] | undefined;
+    const session = raw?.find((c) => c.startsWith(`${SESSION_COOKIE}=`))?.split(';')[0];
+    const csrf = raw
+        ?.find((c) => c.startsWith(`${CSRF_COOKIE}=`))
+        ?.split(';')[0]
+        ?.split('=')[1];
+    if (!session || !csrf) throw new Error('login did not set both cookies');
+    return { cookie: `${session}; ${CSRF_COOKIE}=${csrf}`, csrf };
+}
+
+/**
+ * Two clean-ups of what the import left: companies named for their site's page title, and open deals with no owner.
+ */
+describe('clean-up jobs: page-title company names and unowned open deals', () => {
+    let app: INestApplication;
+    let http: () => request.Agent;
+    let owner: PrismaService;
+    const stamp = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const password = 'correct horse battery staple';
+    let admin: Browser;
+    let ana: Browser;
+    let workspace: string;
+    let adminId: string;
+    let anaId: string;
+
+    const as = (who: Browser) => ({
+        get: (path: string) => http().get(path).set('Cookie', who.cookie),
+        post: (path: string) => http().post(path).set('Cookie', who.cookie).set(CSRF_HEADER, who.csrf),
+    });
+    const w = (path: string) => `/api/w/${workspace}${path}`;
+    const id = (res: Response) => (res.body as { id: string }).id;
+    const company = async (name: string, domain?: string) =>
+        id(
+            await as(admin)
+                .post(w('/companies'))
+                .send({ name, ...(domain ? { domain } : {}) })
+                .expect(201),
+        );
+    const companyRow = (companyId: string) =>
+        owner.company.findUniqueOrThrow({ where: { id: companyId }, select: { name: true, deletedAt: true } });
+
+    beforeAll(async () => {
+        const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
+        app = configureApp(moduleRef.createNestApplication<NestExpressApplication>(APP_OPTIONS));
+        await app.init();
+        http = () => request(app.getHttpServer() as Parameters<typeof request>[0]);
+        owner = app.get(PrismaService);
+
+        const adminEmail = `cuj-admin-${stamp}@example.test`;
+        const res = await http()
+            .post('/api/auth/signup')
+            .send({ email: adminEmail, password, workspaceName: `Cuj ${stamp}` });
+        expect(res.status).toBe(201);
+        await verifyAddress(app, http, adminEmail);
+        admin = browserFrom(res);
+        workspace = (res.body as { workspace: { id: string } }).workspace.id;
+        const roles = (await as(admin).get(w('/roles')).expect(200)).body as { id: string; name: string }[];
+        const manager = roles.find((r) => r.name === 'manager')!.id;
+        const anaEmail = `cuj-ana-${stamp}@example.test`;
+        const invite = await as(admin).post(w('/invites')).send({ email: anaEmail, roleId: manager }).expect(201);
+        const joined = await http()
+            .post(`/api/auth/invites/${(invite.body as { token: string }).token}/signup`)
+            .send({ password })
+            .expect(201);
+        await verifyAddress(app, http, anaEmail);
+        ana = browserFrom(joined);
+        const members = (await as(admin).get(w('/members')).expect(200)).body as { id: string; email: string }[];
+        adminId = members.find((m) => m.email === adminEmail)!.id;
+        anaId = members.find((m) => m.email === anaEmail)!.id;
+    });
+
+    afterAll(async () => {
+        await app?.close();
+    });
+
+    it('knows a page title from a company name', () => {
+        for (const name of ['Home', 'Coming Soon', 'Index of /', 'Just another WordPress site', '404 Not Found']) {
+            expect(PAGE_TITLE_NAME.test(name), name).toBe(true);
+        }
+        for (const name of ['Home Depot', 'Welcome Break', 'Acme', 'Test Kitchen Ltd', 'GoDaddy']) {
+            expect(PAGE_TITLE_NAME.test(name), name).toBe(false);
+        }
+    });
+
+    describe('rename-page-title-companies', () => {
+        let home: string;
+        let nowhere: string;
+        let real: string;
+        let emptyRelay: string;
+        let usedRelay: string;
+        const run = (apply: boolean) =>
+            renamePageTitleCompanies(app, workspace, {
+                apply,
+                deleteEmpty: [`relay-empty-${stamp}.test`, `relay-used-${stamp}.test`],
+            });
+        const expected = { pageTitled: 2, renamed: 1, noDomain: 1, deleted: 1, notEmpty: 1, failed: 0 };
+
+        beforeAll(async () => {
+            home = await company('Home', `home-${stamp}.test`);
+            nowhere = await company('Coming Soon');
+            real = await company(`Acme ${stamp}`, `acme-${stamp}.test`);
+            emptyRelay = await company('Relay', `relay-empty-${stamp}.test`);
+            usedRelay = await company('Relay too', `relay-used-${stamp}.test`);
+            await as(admin)
+                .post(w('/people'))
+                .send({
+                    nameFirst: 'Dana',
+                    emails: { primary: `dana-${stamp}@example.test`, additional: [] },
+                    companyId: usedRelay,
+                })
+                .expect(201);
+        });
+
+        it('estimates, changing nothing', async () => {
+            expect(await run(false)).toEqual(expected);
+            expect((await companyRow(home)).name).toBe('Home');
+            expect((await companyRow(emptyRelay)).deletedAt).toBeNull();
+        });
+
+        it('renames a page-titled company to its domain and deletes a listed company only when it is empty', async () => {
+            expect(await run(true)).toEqual(expected);
+            expect((await companyRow(home)).name).toBe(`home-${stamp}.test`);
+            expect((await companyRow(nowhere)).name, 'no domain to be named for').toBe('Coming Soon');
+            expect((await companyRow(real)).name).toBe(`Acme ${stamp}`);
+            expect((await companyRow(emptyRelay)).deletedAt).not.toBeNull();
+            expect((await companyRow(usedRelay)).deletedAt, 'it has a person').toBeNull();
+        });
+
+        it('changes nothing run again', async () => {
+            expect(await run(true)).toEqual({ ...expected, pageTitled: 1, renamed: 0, deleted: 0 });
+        });
+    });
+
+    describe('assign-deal-owners', () => {
+        let filled: string;
+        let elsewhere: string;
+        let orphan: string;
+        const run = (apply: boolean) => assignDealOwners(app, workspace, { apply, batch: 1 });
+        const dealOwner = async (dealId: string) =>
+            (await owner.opportunity.findUniqueOrThrow({ where: { id: dealId }, select: { ownerId: true } })).ownerId;
+        const expected = {
+            deals: 3,
+            assigned: 1,
+            noContactOwner: 1,
+            companyElsewhere: 1,
+            owners: 1,
+            mostToOne: 1,
+            failed: 0,
+        };
+
+        beforeAll(async () => {
+            const person = async (who: Browser, local: string, companyId: string) =>
+                id(
+                    await as(who)
+                        .post(w('/people'))
+                        .send({
+                            nameFirst: local,
+                            emails: { primary: `${local}-${stamp}@example.test`, additional: [] },
+                            companyId,
+                        })
+                        .expect(201),
+                );
+            const deal = async (name: string, pointOfContactId: string, companyId: string) => {
+                const made = id(
+                    await as(admin)
+                        .post(w('/opportunities'))
+                        .send({ name, currency: 'USD', pointOfContactId, companyId })
+                        .expect(201),
+                );
+                await owner.opportunity.update({ where: { id: made }, data: { ownerId: null } });
+                return made;
+            };
+            // Nobody's company, Ana's contact: the deal is Ana's to have.
+            const open = await company(`Open ${stamp}`, `open-${stamp}.test`);
+            await owner.company.update({ where: { id: open }, data: { ownerId: null } });
+            filled = await deal('Fill me', await person(ana, 'ana-contact', open), open);
+            // The admin's company, Ana's contact: a deal with it would be the admin's, so it is left.
+            const admins = await company(`Admins ${stamp}`, `admins-${stamp}.test`);
+            elsewhere = await deal('Leave me', await person(ana, 'ana-elsewhere', admins), admins);
+            // A contact nobody owns.
+            const loose = await person(admin, 'loose', open);
+            await owner.person.update({ where: { id: loose }, data: { ownerId: null } });
+            orphan = await deal('Nobody’s', loose, open);
+        });
+
+        it('estimates, changing nothing', async () => {
+            expect(await run(false)).toEqual(expected);
+            expect(await dealOwner(filled)).toBeNull();
+        });
+
+        it('gives an unowned open deal to its contact’s owner, silently and on its ownership history', async () => {
+            expect(await run(true)).toEqual(expected);
+            expect(await dealOwner(filled)).toBe(anaId);
+            expect(await dealOwner(elsewhere), `the company is ${adminId}’s`).toBeNull();
+            expect(await dealOwner(orphan)).toBeNull();
+            const fill = await owner.ownershipTransfer.findFirstOrThrow({
+                where: { object: 'opportunity', recordId: filled },
+            });
+            expect(fill).toMatchObject({
+                fromMemberId: null,
+                toMemberId: anaId,
+                status: 'forced',
+                reason: TRANSFER_REASON_DEAL_OWNER_FILL,
+            });
+            expect(await owner.notification.count({ where: { transferId: fill.id } })).toBe(0);
+        });
+
+        it('changes nothing run again', async () => {
+            expect(await run(true)).toEqual({ ...expected, deals: 2, assigned: 0, owners: 0, mostToOne: 0 });
+        });
+    });
+});
