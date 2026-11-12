@@ -86,6 +86,10 @@ const CONSUMER_MAIL: ReadonlySet<string> = new Set([
     'rediffmail.com',
     'bigpond.com',
     'optusnet.com.au',
+    // A service's relay addresses, each some other company's customer (`<customer>@<tenant>.intercom-mail.com`)
+    'intercom-mail.com',
+    'hubspotemail.net',
+    'onmicrosoft.com',
     // Anyone's
     'email.com',
     'duck.com',
