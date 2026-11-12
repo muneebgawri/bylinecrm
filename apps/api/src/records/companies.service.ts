@@ -10,7 +10,9 @@ import { actorOf } from './actor';
 import type { BulkRecords } from './bulk/bulk.service';
 import { bareDomain } from '@bylinecrm/shared';
 import { companyDomain } from './company-domain';
-import { CompanyOwnership } from './company-ownership';
+import { CompanyOwnership, isCaller, isGoverned } from './company-ownership';
+import { requireCallerMember } from '../infra/caller-member';
+import { TransfersService } from '../transfers/transfers.service';
 import { CustomFieldsService } from './custom-fields/custom-fields.service';
 import { diffOf, isEmpty, projectedChanges } from './diff';
 import { type CountedPage, countTotal, EMPTY_COUNTED_PAGE, paginate } from './list-query';
@@ -66,6 +68,7 @@ export class CompaniesService implements BulkRecords {
         private readonly customFields: CustomFieldsService,
         private readonly events: DomainEvents,
         private readonly ownership: CompanyOwnership,
+        private readonly transfers: TransfersService,
     ) {}
 
     /** Live companies, or the trash when `deleted`; the page and its total read one `where`. */
@@ -93,10 +96,34 @@ export class CompaniesService implements BulkRecords {
         return this.rls.withWorkspace(async (tx) => view(await find(tx, context, id)));
     }
 
+    /**
+     * OWN-2g: a company saved at a domain where leads were saved before it takes those leads in, and is the first
+     * saver's — the member who holds the domain through them (`domainLeads`) — when that is not who saves it: it is
+     * saved for them and handed over, so they are told, and the saver reads whose it is in the response's owner.
+     */
     async create(input: CompanyInput & { name: string }): Promise<CompanyView> {
         const context = this.current();
+        const leads = isCaller(context) ? await this.ownership.domainLeads(context, input.domain) : null;
+        const holder = leads?.holder;
+        if (holder && isGoverned(context) && holder.ownerId !== resolveOwner(context, input.ownerId, undefined)) {
+            const me = await this.rls.withWorkspace((tx) => requireCallerMember(tx, context));
+            const row = await this.transfers.handOver(
+                context,
+                me,
+                holder.ownerId,
+                async (tx, wide) => {
+                    const created = await this.createIn(tx, wide, { ...input, ownerId: holder.ownerId });
+                    await this.ownership.linkPeople(tx, created.row.id, leads.personIds);
+                    await this.events.record(tx, created.event);
+                    return { row: created.row, target: { type: 'company' as const, id: created.row.id } };
+                },
+                `${holder.ownerName ?? 'They'} saved a lead there first`,
+            );
+            return view(row);
+        }
         const row = await this.rls.withWorkspace(async (tx) => {
             const created = await this.createIn(tx, context, input);
+            if (leads) await this.ownership.linkPeople(tx, created.row.id, leads.personIds);
             await this.events.record(tx, created.event);
             return created.row;
         });

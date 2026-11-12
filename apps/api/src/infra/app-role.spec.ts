@@ -45,7 +45,7 @@ describe('migrations and the database roles', () => {
      * The ownership role bypasses RLS (OWN-2d): it may update companies and read members, use the schema and own the
      * claim function — never another table, never a delete. Any other grant to it fails here.
      */
-    it('give the ownership role SELECT/UPDATE on companies, SELECT on workspace_members, schema USAGE and ownership of claim_company only', () => {
+    it('give the ownership role SELECT/UPDATE on companies, SELECT on workspace_members, SELECT and a company link on people, schema USAGE and its two functions only', () => {
         const toOwnership = [
             ...sql.matchAll(new RegExp(`(GRANT|ALTER FUNCTION)\\s[^;]*?\\bTO\\s+${OWNERSHIP_DB_ROLE}\\b`, 'gi')),
         ].map((m) => m[0].replace(/\s+/g, ' ').trim());
@@ -58,6 +58,10 @@ describe('migrations and the database roles', () => {
                 `ALTER FUNCTION claim_company(uuid, uuid) OWNER TO ${OWNERSHIP_DB_ROLE}`,
                 // OWN-2f: the claim takes the owner it is taken from.
                 `ALTER FUNCTION claim_company(uuid, uuid, uuid) OWNER TO ${OWNERSHIP_DB_ROLE}`,
+                // OWN-2g: a company saved at a domain links the leads saved there before it.
+                `GRANT SELECT ON "people" TO ${OWNERSHIP_DB_ROLE}`,
+                `GRANT UPDATE ("company_id", "updated_at") ON "people" TO ${OWNERSHIP_DB_ROLE}`,
+                `ALTER FUNCTION link_company_people(uuid, uuid[]) OWNER TO ${OWNERSHIP_DB_ROLE}`,
             ]).toContain(statement);
         }
     });

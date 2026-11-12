@@ -14,6 +14,7 @@ import request, { type Response } from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { APP_OPTIONS, configureApp } from '../../src/app';
 import { AppModule } from '../../src/app.module';
+import { linkDomainPeople } from '../../src/cli/link-domain-people';
 import { PrismaService } from '../../src/infra/prisma.service';
 import { verifyAddress } from '../support/mail';
 import { settle } from '../support/outbox';
@@ -777,6 +778,118 @@ describe('OWN-2 company-domain ownership (FR-CRMS-20)', () => {
                     .send({ ...off, dormantOwnerMonths: 6 })
                     .expect(200);
             }
+        });
+    });
+
+    describe('OWN-2g: a company saved after leads at its domain', () => {
+        const ownerOfCompany = async (id: string) =>
+            (await app.get(PrismaService).company.findUniqueOrThrow({ where: { id }, select: { ownerId: true } }))
+                .ownerId;
+        const companyOfPerson = async (id: string) =>
+            (await app.get(PrismaService).person.findUniqueOrThrow({ where: { id }, select: { companyId: true } }))
+                .companyId;
+
+        it('is the first saver’s: saved for them, handed over, and the leads saved there before it are linked to it', async () => {
+            const rook = `rook-${stamp}.test`;
+            const first = (
+                await as(ana)
+                    .post(w('/people'))
+                    .send({ nameFirst: 'Cal', emails: { primary: `cal@${rook}`, additional: [] } })
+                    .expect(201)
+            ).body as { id: string; companyId: string | null };
+            expect(first.companyId).toBeNull();
+
+            const made = await as(ben)
+                .post(w('/companies'))
+                .send({ name: `Rook ${stamp}`, domain: rook });
+            expect(made.status, JSON.stringify(made.body)).toBe(201);
+            const company = made.body as { id: string; ownerId: string };
+            expect(company.ownerId).toBe(anaId);
+            expect(await companyOfPerson(first.id)).toBe(company.id);
+            const handed = await app.get(PrismaService).ownershipTransfer.findFirst({
+                where: { workspaceId: workspace, object: 'company', recordId: company.id },
+            });
+            expect(handed).toMatchObject({ fromMemberId: benId, toMemberId: anaId, status: 'forced' });
+        });
+
+        it('the saver’s own leads there: the company is theirs, and takes them in', async () => {
+            const sage = `sage-${stamp}.test`;
+            const mine = (
+                await as(ben)
+                    .post(w('/people'))
+                    .send({ nameFirst: 'Dee', emails: { primary: `dee@${sage}`, additional: [] } })
+                    .expect(201)
+            ).body as { id: string };
+            const company = (
+                await as(ben)
+                    .post(w('/companies'))
+                    .send({ name: `Sage ${stamp}`, domain: sage })
+                    .expect(201)
+            ).body as { id: string; ownerId: string };
+            expect(company.ownerId).toBe(benId);
+            expect(await companyOfPerson(mine.id)).toBe(company.id);
+        });
+
+        it('a lead with a new company at that domain is refused by name, and may be saved for the first saver', async () => {
+            const tern = `tern-${stamp}.test`;
+            const first = (
+                await as(ana)
+                    .post(w('/people'))
+                    .send({ nameFirst: 'Eve', emails: { primary: `eve@${tern}`, additional: [] } })
+                    .expect(201)
+            ).body as { id: string };
+            const lead = {
+                nameFirst: 'Fay',
+                emails: { primary: `fay@${tern}`, additional: [] },
+                company: { name: 'Tern' },
+            };
+
+            const refused = await as(ben).post(w('/people')).send(lead);
+            expect(refused.status, JSON.stringify(refused.body)).toBe(409);
+            expect(refused.body).toMatchObject({
+                code: 'conflict.company_owned',
+                details: { companyName: 'Tern', ownerMemberId: anaId },
+            });
+            expect((refused.body as { details: Record<string, unknown> }).details).not.toHaveProperty('companyId');
+
+            const saved = await as(ben)
+                .post(w('/people'))
+                .send({ ...lead, handToOwner: true });
+            expect(saved.status, JSON.stringify(saved.body)).toBe(201);
+            const person = saved.body as { ownerId: string; companyId: string };
+            expect(person.ownerId).toBe(anaId);
+            expect(await ownerOfCompany(person.companyId)).toBe(anaId);
+            expect(await companyOfPerson(first.id)).toBe(person.companyId);
+        });
+
+        it('link-domain-people links the leads an import left without their company, and nothing twice', async () => {
+            const umber = `umber-${stamp}.test`;
+            const lone = (
+                await as(ana)
+                    .post(w('/people'))
+                    .send({ nameFirst: 'Gil', emails: { primary: `gil@${umber}`, additional: [] } })
+                    .expect(201)
+            ).body as { id: string };
+            const free = (
+                await as(ana)
+                    .post(w('/people'))
+                    .send({ nameFirst: 'Hal', emails: { primary: `hal-${stamp}@gmail.com`, additional: [] } })
+                    .expect(201)
+            ).body as { id: string };
+            // The import's company: saved without its people (as the Bigin import left them).
+            const prisma = app.get(PrismaService);
+            const company = await prisma.company.create({
+                data: { workspaceId: workspace, name: `Umber ${stamp}`, domain: umber, createdBy: { kind: 'import' } },
+            });
+
+            const estimate = await linkDomainPeople(app, workspace, { apply: false });
+            expect(estimate.linked).toBeGreaterThanOrEqual(1);
+            expect(await companyOfPerson(lone.id)).toBeNull();
+
+            await linkDomainPeople(app, workspace, { apply: true });
+            expect(await companyOfPerson(lone.id)).toBe(company.id);
+            expect(await companyOfPerson(free.id)).toBeNull();
+            expect((await linkDomainPeople(app, workspace, { apply: false })).linked).toBe(0);
         });
     });
 });

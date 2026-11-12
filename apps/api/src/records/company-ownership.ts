@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import {
     DORMANT_OWNER_MONTHS_DEFAULT,
     bareDomain,
@@ -36,6 +37,14 @@ export interface DomainCompany {
     /** OWN-2f: the owner the row names who has not worked it in `dormantOwnerMonths`, and so holds it for nobody. */
     dormantOwnerId?: string;
 }
+
+/** OWN-2g: the leads at a domain with no company yet, and who holds the domain through them. */
+export interface DomainLeads {
+    personIds: string[];
+    holder: { ownerId: string; ownerName: string | null } | null;
+}
+
+const NAMED_MEMBER = { user: { select: { displayName: true } } } as const;
 
 /** What is read of a company to say whose it is. */
 const COMPANY_OWNER_SELECT = {
@@ -145,7 +154,7 @@ export class CompanyOwnership {
         context: WorkspaceRunContext,
         input: { address: string | null | undefined; companyId: string | null | undefined; ownerId: string | null },
     ): Promise<{ companyId?: string; company: DomainCompany | null }> {
-        if (!governed(context)) return { company: null };
+        if (!isGoverned(context)) return { company: null };
         const named = input.companyId ? await this.company(context, input.companyId) : null;
         const byDomain = named ? null : await this.companyForDomain(context, companyDomainOfAddress(input.address));
         const company = named ?? byDomain;
@@ -192,7 +201,7 @@ export class CompanyOwnership {
 
     /** A deal at `companyId` owned by `ownerId`: refused when the company is someone else's. */
     async checkDeal(context: WorkspaceRunContext, companyId: string | null, ownerId: string | null): Promise<void> {
-        if (!governed(context) || !companyId) return;
+        if (!isGoverned(context) || !companyId) return;
         const company = await this.company(context, companyId);
         if (company) assertSameOwner(company, ownerId);
     }
@@ -323,6 +332,52 @@ export class CompanyOwnership {
         return this.widened(context, (tx) => poolHoldersIn(tx, addresses));
     }
 
+    /**
+     * OWN-2g: the live leads saved at `domain` that no company holds yet (saved before its company was), and the
+     * member who holds the domain through them: the owner of the earliest, passing over a member who holds nothing
+     * (OWN-2e) and one who has not worked their leads there in the workspace's months (OWN-2f). Read across the
+     * owner scope. Nothing for no domain or free mail.
+     */
+    async domainLeads(context: WorkspaceRunContext, domain: string | null | undefined): Promise<DomainLeads> {
+        const key = domain ? normalisedDomain(domain) : null;
+        if (!key || isFreeMailDomain(key)) return { personIds: [], holder: null };
+        return this.widened(context, async (tx) => {
+            const rows = await tx.$queryRaw<{ id: string; email: string; owner_id: string | null }[]>`
+                SELECT p.id::text AS id, p.email_primary AS email, p.owner_id::text AS owner_id
+                FROM people p
+                WHERE p.company_id IS NULL AND p.deleted_at IS NULL
+                  AND (p.email_primary LIKE ${`%@${key}`} OR p.email_primary LIKE ${`%.${key}`})
+                ORDER BY p.created_at, p.id`;
+            const leads = rows.filter((r) => companyDomainOfAddress(r.email) === key);
+            const ownerless = await ownerlessMembers(tx, await guardrailSettings(tx));
+            const since = await dormantSince(tx);
+            const owners = [...new Set(leads.flatMap((r) => (r.owner_id ? [r.owner_id] : [])))];
+            for (const ownerId of owners) {
+                if (ownerless.has(ownerId)) continue;
+                const theirs = leads.filter((r) => r.owner_id === ownerId).map((r) => r.id);
+                if (since && !(await ownerWorkedPeople(tx, theirs, ownerId, since))) continue;
+                const member = await tx.workspaceMember.findFirst({ where: { id: ownerId }, select: NAMED_MEMBER });
+                return {
+                    personIds: leads.map((r) => r.id),
+                    holder: { ownerId, ownerName: member?.user.displayName ?? null },
+                };
+            }
+            return { personIds: leads.map((r) => r.id), holder: null };
+        });
+    }
+
+    /**
+     * OWN-2g: links `personIds` (leads with no company, read by `domainLeads`) to `companyId`, in the caller's
+     * transaction and past their owner scope (`link_company_people`, a definer function: a member links a
+     * colleague's lead at the company they save). Only the link changes; whose each lead is does not.
+     */
+    async linkPeople(tx: WorkspaceClient, companyId: string, personIds: readonly string[]): Promise<number> {
+        if (personIds.length === 0) return 0;
+        const [row] = await tx.$queryRaw<{ linked: number }[]>`
+            SELECT link_company_people(${companyId}::uuid, ${[...personIds]}::uuid[]) AS linked`;
+        return row?.linked ?? 0;
+    }
+
     private widened<T>(context: WorkspaceRunContext, fn: (tx: WorkspaceClient) => Promise<T>): Promise<T> {
         return acrossOwnerScope(this.rls, this.context, context, fn);
     }
@@ -334,7 +389,7 @@ export function isCaller(context: WorkspaceRunContext): boolean {
 }
 
 /** The rule binds a person or an API key without `record:transfer`; never a job. */
-function governed(context: WorkspaceRunContext): boolean {
+export function isGoverned(context: WorkspaceRunContext): boolean {
     const caller = context.memberId !== undefined || context.apiKeyId !== undefined;
     return caller && !context.capabilities.has('record:transfer');
 }
@@ -357,6 +412,25 @@ export function companyOwned(company: DomainCompany, field: string): ApiExceptio
         `${company.companyName} is ${name}’s: its people and deals are theirs. Save it for them instead.`,
         [{ path: field, message: 'COMPANY_OWNED' }],
         details,
+    );
+}
+
+/**
+ * OWN-2g: `409 conflict.company_owned` for a company not saved yet — its domain is `holder`'s through leads they saved
+ * there first. As `companyOwned`, without a `companyId`: the rep may save the lead for them instead.
+ */
+export function domainHeld(
+    companyName: string,
+    holder: NonNullable<DomainLeads['holder']>,
+    field: string,
+): ApiException {
+    const name = holder.ownerName ?? 'another member';
+    return new ApiException(
+        409,
+        'conflict.company_owned',
+        `${companyName} is ${name}’s: they saved a lead there first. Save it for them instead.`,
+        [{ path: field, message: 'COMPANY_OWNED' }],
+        { companyName, ownerMemberId: holder.ownerId, ownerName: name },
     );
 }
 
@@ -438,29 +512,54 @@ export async function ownerWorkedCompany(
                      AND o.status IN ('accepted', 'forced') AND o.from_member_id IS NOT NULL
                      AND o.decided_at >= ${since})
             OR EXISTS (
-                   SELECT 1 FROM people p
-                   WHERE p.company_id = ${companyId}::uuid AND p.deleted_at IS NULL AND p.created_at >= ${since}
-                     AND p.created_by ->> 'kind' <> 'import'
-                     AND (p.owner_id = ${ownerId}::uuid OR p.created_by ->> 'id' = ${ownerId}))
-            OR EXISTS (
-                   SELECT 1 FROM people p
-                   JOIN mail_participants mp ON mp.workspace_id = p.workspace_id AND mp.person_id = p.id
-                   JOIN mail_messages mm ON mm.id = mp.message_id AND mm.direction = 'outbound' AND mm.sent_at >= ${since}
-                   JOIN mail_participants sp ON sp.message_id = mm.id AND sp.role = 'from' AND sp.member_id = ${ownerId}::uuid
-                   WHERE p.company_id = ${companyId}::uuid AND p.deleted_at IS NULL)
-            OR EXISTS (
                    SELECT 1 FROM timeline_activities t
                    WHERE t.workspace_id = app_workspace_id() AND t.target_id = ${companyId}::uuid
                      AND t.target_type = 'company' AND t.happened_at >= ${since}
                      AND t.actor ->> 'kind' = 'member' AND t.actor ->> 'id' = ${ownerId})
-            OR EXISTS (
-                   SELECT 1 FROM people p
-                   JOIN timeline_activities t ON t.workspace_id = p.workspace_id AND t.target_id = p.id
-                    AND t.target_type = 'person' AND t.happened_at >= ${since}
-                   WHERE p.company_id = ${companyId}::uuid AND p.deleted_at IS NULL
-                     AND t.actor ->> 'kind' = 'member' AND t.actor ->> 'id' = ${ownerId})
+            OR ${workedPeopleSql(Prisma.sql`p.company_id = ${companyId}::uuid`, ownerId, since)}
                AS worked`;
     return row?.worked ?? false;
+}
+
+/**
+ * OWN-2f, for people with no company yet (leads saved at a domain before its company was): whether `ownerId` has
+ * worked any of `personIds` since `since` — the person half of `ownerWorkedCompany`.
+ */
+export async function ownerWorkedPeople(
+    tx: WorkspaceClient,
+    personIds: readonly string[],
+    ownerId: string,
+    since: Date,
+): Promise<boolean> {
+    if (personIds.length === 0) return false;
+    const [row] = await tx.$queryRaw<{ worked: boolean }[]>`
+        SELECT ${workedPeopleSql(Prisma.sql`p.id = ANY(${[...personIds]}::uuid[])`, ownerId, since)} AS worked`;
+    return row?.worked ?? false;
+}
+
+/**
+ * The person half of OWN-2f's reading, for the live people `which` selects (alias `p`): one of them saved since
+ * `since` for or by `ownerId` (not by an import), mailed by them, or acted on by them on the timeline.
+ */
+function workedPeopleSql(which: Prisma.Sql, ownerId: string, since: Date): Prisma.Sql {
+    return Prisma.sql`(
+        EXISTS (
+            SELECT 1 FROM people p
+            WHERE ${which} AND p.deleted_at IS NULL AND p.created_at >= ${since}
+              AND p.created_by ->> 'kind' <> 'import'
+              AND (p.owner_id = ${ownerId}::uuid OR p.created_by ->> 'id' = ${ownerId}))
+        OR EXISTS (
+            SELECT 1 FROM people p
+            JOIN mail_participants mp ON mp.workspace_id = p.workspace_id AND mp.person_id = p.id
+            JOIN mail_messages mm ON mm.id = mp.message_id AND mm.direction = 'outbound' AND mm.sent_at >= ${since}
+            JOIN mail_participants sp ON sp.message_id = mm.id AND sp.role = 'from' AND sp.member_id = ${ownerId}::uuid
+            WHERE ${which} AND p.deleted_at IS NULL)
+        OR EXISTS (
+            SELECT 1 FROM people p
+            JOIN timeline_activities t ON t.workspace_id = p.workspace_id AND t.target_id = p.id
+             AND t.target_type = 'person' AND t.happened_at >= ${since}
+            WHERE ${which} AND p.deleted_at IS NULL
+              AND t.actor ->> 'kind' = 'member' AND t.actor ->> 'id' = ${ownerId}))`;
 }
 
 /**
