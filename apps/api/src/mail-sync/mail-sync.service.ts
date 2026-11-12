@@ -17,6 +17,7 @@ import {
     GMAIL_LIST_PAGE_SIZE,
     GMAIL_UNITS,
     MAIL_BACKFILL_LEASE_MS,
+    MAIL_BACKFILL_REFRESH_BATCH,
     MAIL_BACKFILL_METADATA_HEADERS,
     MAIL_INITIAL_SYNC_DAYS,
     MAIL_RESYNC_MARGIN_MS,
@@ -645,12 +646,17 @@ export class MailSyncService {
                 true,
             );
             // Their events are flagged historical, so contact status is not re-derived message by message (the
-            // outbox fell hours behind that way): the people this chunk stored mail for are refreshed here, once.
+            // outbox fell hours behind that way): the people this chunk stored mail for are refreshed here, once,
+            // `MAIL_BACKFILL_REFRESH_BATCH` per transaction so no one transaction reads hundreds of people's mail.
             if (addresses.size > 0) {
-                await this.rls.withWorkspace(run.mailbox.workspaceId, async (tx) => {
-                    const people = await personsByAddress(tx, [...addresses]);
-                    await refreshContactStatus(tx, [...new Set(people.values())]);
-                });
+                const people = await this.rls.withWorkspace(run.mailbox.workspaceId, (tx) =>
+                    personsByAddress(tx, [...addresses]),
+                );
+                const ids = [...new Set(people.values())];
+                for (let at = 0; at < ids.length; at += MAIL_BACKFILL_REFRESH_BATCH) {
+                    const batch = ids.slice(at, at + MAIL_BACKFILL_REFRESH_BATCH);
+                    await this.rls.withWorkspace(run.mailbox.workspaceId, (tx) => refreshContactStatus(tx, batch));
+                }
             }
             const done = addProgress(delta, totals);
             for (const key of Object.keys(done) as (keyof BackfillProgress)[]) counts[key] += done[key];
