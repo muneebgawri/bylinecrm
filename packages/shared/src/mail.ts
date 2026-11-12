@@ -255,3 +255,17 @@ export function normaliseBlocklistValue(raw: string): string | null {
 export function blocklistCovers(entry: string, address: string): boolean {
     return entry.startsWith('@') ? address.endsWith(entry) : address === entry;
 }
+
+/**
+ * The local parts of automated senders — bounce handlers, postmasters, notification and no-reply streams — alone or
+ * with a `-`, `+` or `_` suffix (`notifications-noreply`, `bounces+abc`; a dotted name such as `postmaster.jones` is a person). Mail from one is never about a contact, and a person
+ * record with such an address is not a contact (#383): the API refuses it, and `retire-non-contacts` retires it.
+ */
+const SYSTEM_SENDER_LOCAL_PART =
+    /^(mailer-daemon|postmaster|no-?reply|do-?not-?reply|notifications?|bounces?)([+_-].*)?$/;
+
+/** Whether an address is an automated sender's (`SYSTEM_SENDER_LOCAL_PART`), whatever its case or domain. */
+export function isSystemSender(address: string): boolean {
+    const at = address.lastIndexOf('@');
+    return at > 0 && SYSTEM_SENDER_LOCAL_PART.test(address.slice(0, at).trim().toLowerCase());
+}
