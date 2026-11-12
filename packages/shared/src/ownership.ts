@@ -79,6 +79,13 @@ export interface OwnershipConflictView {
 export const TRANSFER_COOLING_DAYS_DEFAULT = 14;
 export const TRANSFER_COOLING_DAYS_LIMITS = { min: 0, max: 90 } as const;
 
+/**
+ * OWN-2f: the months an owner may leave a company untouched and keep it — its default and bounds. `0` turns it off:
+ * an owner keeps a company however long it is left.
+ */
+export const DORMANT_OWNER_MONTHS_DEFAULT = 6;
+export const DORMANT_OWNER_MONTHS_LIMITS = { min: 0, max: 36 } as const;
+
 /** A workspace's ownership settings (Settings → Ownership). */
 export interface OwnershipSettingsView {
     /**
@@ -86,6 +93,12 @@ export interface OwnershipSettingsView {
      * not accepted by them. Managers and admins (`record:transfer`), and their forced transfers, are exempt.
      */
     transferCoolingDays: number;
+    /**
+     * OWN-2f: months after which an owner who has not worked a company (no open deal, no mail, nothing saved or done
+     * there, no hand-over to them) holds it for nobody — its leads are anyone's, and the next member to save a
+     * person there takes it over. 0 turns it off.
+     */
+    dormantOwnerMonths: number;
 }
 
 /** What a `409 conflict.transfer_cooling` says in `details`. */

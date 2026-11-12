@@ -90,7 +90,7 @@ export async function assignCompanyOwners(
         dealsMoved: 0,
         companiesDormant: 0,
     };
-    const since = dormantSince();
+    const since = await rls.withWorkspace(workspaceId, (tx) => dormantSince(tx));
 
     // 1. Companies with no owner, each with the owner of its first saved person (an active member).
     let after = '00000000-0000-0000-0000-000000000000';
@@ -166,9 +166,9 @@ export async function assignCompanyOwners(
         for (const c of batch) {
             if (c.people === 0 || c.owner_id === null) continue;
             // OWN-2f: an owner who has let the company go is not given its people; the next saver takes it over.
-            const worked = await rls.withWorkspace(workspaceId, (tx) =>
-                ownerWorkedCompany(tx, c.id, c.owner_id, since),
-            );
+            const worked =
+                since === null ||
+                (await rls.withWorkspace(workspaceId, (tx) => ownerWorkedCompany(tx, c.id, c.owner_id, since)));
             if (!worked) {
                 report.companiesDormant += 1;
                 continue;

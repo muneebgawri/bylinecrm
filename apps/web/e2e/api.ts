@@ -139,7 +139,7 @@ const GETS: [RegExp, Handler][] = [
     [new RegExp(`^${W}/companies/${ID}/domains$`), () => []],
     [new RegExp(`^${W}/ownership/conflicts$`), () => []],
     // OWN-1, owner decision 2: the transfer cooling period (the default).
-    [new RegExp(`^${W}/ownership/settings$`), () => ({ transferCoolingDays: 14 })],
+    [new RegExp(`^${W}/ownership/settings$`), () => ({ transferCoolingDays: 14, dormantOwnerMonths: 6 })],
     // GUARD-1: the guardrail events; none in the fixtures.
     [new RegExp(`^${W}/guardrails/events(\\?.*)?$`), () => data.page([])],
     // GUARD-2: every member's mail is seen in the fixtures; nobody to chase.

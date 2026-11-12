@@ -31831,9 +31831,15 @@
                         "minimum": 0,
                         "maximum": 90,
                         "description": "Days after a transfer during which the record cannot go back to the member it left (not offered to them, not accepted by them). Managers and admins are exempt. 0 turns it off."
+                    },
+                    "dormantOwnerMonths": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 36,
+                        "description": "OWN-2f: months after which a company owner who has not worked it (no open deal, no mail, nothing saved or done there, no hand-over to them) holds it for nobody: its leads are anyone’s, and the next member to save a person there takes it over. 0 turns it off."
                     }
                 },
-                "required": ["transferCoolingDays"]
+                "required": ["transferCoolingDays", "dormantOwnerMonths"]
             },
             "ResolveConflictsDto": {
                 "type": "object",
@@ -39161,9 +39167,15 @@
                         "minimum": 0,
                         "maximum": 90,
                         "description": "Days after a transfer during which the record cannot go back to the member it left (not offered to them, not accepted by them). Managers and admins are exempt. 0 turns it off."
+                    },
+                    "dormantOwnerMonths": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 36,
+                        "description": "OWN-2f: months after which a company owner who has not worked it (no open deal, no mail, nothing saved or done there, no hand-over to them) holds it for nobody: its leads are anyone’s, and the next member to save a person there takes it over. 0 turns it off."
                     }
                 },
-                "required": ["transferCoolingDays"]
+                "required": ["transferCoolingDays", "dormantOwnerMonths"]
             },
             "OwnershipResolution": {
                 "type": "object",

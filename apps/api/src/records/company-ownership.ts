@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import {
+    DORMANT_OWNER_MONTHS_DEFAULT,
     bareDomain,
     type CompanyOwnedDetails,
     type DomainEvent,
@@ -29,18 +30,12 @@ export interface DomainCompany {
     ownerName: string | null;
     /**
      * True when a governed save at it claims it for the saver: the row names no owner (OWN-2d), or its owner has not
-     * worked it in `DORMANT_OWNER_MONTHS` (OWN-2f, `dormantOwnerId`).
+     * worked it in the workspace's `dormantOwnerMonths` (OWN-2f, `dormantOwnerId`).
      */
     unclaimed: boolean;
-    /** OWN-2f: the owner the row names who has not worked it in `DORMANT_OWNER_MONTHS`, and so holds it for nobody. */
+    /** OWN-2f: the owner the row names who has not worked it in `dormantOwnerMonths`, and so holds it for nobody. */
     dormantOwnerId?: string;
 }
-
-/**
- * OWN-2f: the months an owner may leave a company untouched and keep it. After that its leads are anyone's (as a
- * member who has left holds none), and the next member to save a person there takes the company over.
- */
-export const DORMANT_OWNER_MONTHS = 6;
 
 /** What is read of a company to say whose it is. */
 const COMPANY_OWNER_SELECT = {
@@ -90,7 +85,8 @@ export function normalisedDomain(value: string): string {
  *   company (owners on its people, none on it) is held like one saved here, from the first save on.
  *   `assign-company-owners.js` fills the imported ones in batches.
  * - **An owner who stops working a company lets it go** (OWN-2f). An owner with no open deal at it, no mail to
- *   anyone there and nothing done on it or its people in `DORMANT_OWNER_MONTHS` holds it for nobody: its leads
+ *   anyone there and nothing done on it or its people in the workspace's `dormantOwnerMonths` (Settings →
+ *   Ownership; 0 is off) holds it for nobody: its leads
  *   are anyone's to mail and save, and the next governed save of a person there takes the company over.
  */
 @Injectable()
@@ -380,9 +376,10 @@ export async function resolveCompanyOwner(tx: WorkspaceClient, company: CompanyO
     const ownerless = await ownerlessMembers(tx, await guardrailSettings(tx));
     if (company.ownerId !== null) {
         if (effectiveOwner(company.ownerId, ownerless) === null) return { ...base, ownerId: null, ownerName: null };
-        // OWN-2f: an owner who has not worked the company in DORMANT_OWNER_MONTHS holds it for nobody; the next
+        // OWN-2f: an owner who has not worked the company in the workspace's months holds it for nobody; the next
         // governed save at it takes it over.
-        if (!(await ownerWorkedCompany(tx, company.id, company.ownerId, dormantSince()))) {
+        const since = await dormantSince(tx);
+        if (since && !(await ownerWorkedCompany(tx, company.id, company.ownerId, since))) {
             return { ...base, ownerId: null, ownerName: null, unclaimed: true, dormantOwnerId: company.ownerId };
         }
         return { ...base, ownerId: company.ownerId, ownerName: company.owner?.user.displayName ?? null };
@@ -395,10 +392,21 @@ export async function resolveCompanyOwner(tx: WorkspaceClient, company: CompanyO
     return { ...base, ownerId: first?.ownerId ?? null, ownerName: first?.owner?.user.displayName ?? null };
 }
 
-/** OWN-2f: the start of the window an owner must have worked a company in to keep it. */
-export function dormantSince(now: Date = new Date()): Date {
+/** OWN-2f: the workspace's months an owner may leave a company untouched and keep it (Settings → Ownership). */
+export async function dormantOwnerMonths(tx: WorkspaceClient): Promise<number> {
+    const row = await tx.ownershipSettings.findFirst({ select: { dormantOwnerMonths: true } });
+    return row?.dormantOwnerMonths ?? DORMANT_OWNER_MONTHS_DEFAULT;
+}
+
+/**
+ * OWN-2f: the start of the window an owner must have worked a company in to keep it; null when the workspace has
+ * turned the rule off (0 months).
+ */
+export async function dormantSince(tx: WorkspaceClient, now: Date = new Date()): Promise<Date | null> {
+    const months = await dormantOwnerMonths(tx);
+    if (months === 0) return null;
     const since = new Date(now);
-    since.setUTCMonth(since.getUTCMonth() - DORMANT_OWNER_MONTHS);
+    since.setUTCMonth(since.getUTCMonth() - months);
     return since;
 }
 

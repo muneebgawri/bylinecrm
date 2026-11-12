@@ -2318,6 +2318,8 @@ model OwnershipSettings {
   workspaceId         String   @id @map("workspace_id") @db.Uuid
   /// Days a transferred record cannot go back to the member it left (0–90, checked by the database; 0 is off).
   transferCoolingDays Int      @default(14) @map("transfer_cooling_days")
+  /// OWN-2f: months an owner may leave a company untouched and keep it (0–36, checked by the database; 0 is off).
+  dormantOwnerMonths  Int      @default(6) @map("dormant_owner_months")
   updatedAt           DateTime @updatedAt @map("updated_at") @db.Timestamptz
 
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
