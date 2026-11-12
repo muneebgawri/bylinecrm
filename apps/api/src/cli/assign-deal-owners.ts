@@ -8,10 +8,12 @@ import { PrismaService } from '../infra/prisma.service';
 import { RlsPrismaService } from '../infra/rls-prisma.service';
 import { WorkspaceContext } from '../infra/workspace-context';
 import { OpportunitiesService } from '../records/opportunities.service';
+import { PeopleService } from '../records/people.service';
 import { TransfersService } from '../transfers/transfers.service';
 import { importJobContext, JOB_WRITE_CHUNK, quietWorkers } from './job-common';
 
-const USAGE = 'usage: node dist/cli/assign-deal-owners.js <workspace-slug> --estimate|--apply [--batch <n>]';
+const USAGE =
+    'usage: node dist/cli/assign-deal-owners.js <workspace-slug> --estimate|--apply [--by-mail <days>] [--batch <n>]';
 
 /** Deals read per statement (`--batch`): a page, never the whole table. */
 export const DEFAULT_BATCH = 500;
@@ -19,23 +21,38 @@ export const DEFAULT_BATCH = 500;
 /** The reason on the hand-over that gave an unowned deal the owner of its contact. */
 export const TRANSFER_REASON_DEAL_OWNER_FILL = 'Deal ownership: the contact’s owner';
 
+/** The reason when the deal's company is a member's: a deal with a company is its owner's (OWN-2). */
+export const TRANSFER_REASON_DEAL_COMPANY_OWNER = 'Deal ownership: the company’s owner';
+
+/** The reason when nobody owns the contact or the company and a member is in mail with the contact (`byMailDays`). */
+export const TRANSFER_REASON_DEAL_IN_MAIL = 'Deal ownership: the member in mail with the contact';
+
 export interface AssignDealsOptions {
     /** Write: without it, nothing changes and the counts say what `--apply` would do. */
     apply: boolean;
     /** Deals read per statement; `DEFAULT_BATCH` when absent. */
     batch?: number | undefined;
+    /**
+     * For a deal whose contact and company nobody active owns: give it — and its contact — to the member most
+     * recently in mail with the contact (either way) within this many days. Absent: such a deal is left.
+     */
+    byMailDays?: number | undefined;
     onProgress?: (line: string) => void;
 }
 
 export interface AssignDealsReport {
     /** Open deals with no owner. */
     deals: number;
-    /** Of those, given to the owner of their contact. */
+    /** Of those, given an owner: the three below. */
     assigned: number;
-    /** Left: no contact, or a contact nobody active owns (no owner, one who left, a shared mailbox). */
-    noContactOwner: number;
-    /** Left: the deal's company is another active member's — a deal with a company is its owner's (OWN-2). */
-    companyElsewhere: number;
+    /** Given to the active owner of the deal's company: a deal with a company is its owner's (OWN-2). */
+    toCompanyOwner: number;
+    /** Given to the active owner of their contact (the company is nobody's). */
+    toContactOwner: number;
+    /** `byMailDays`: given, with their contact, to the member in mail with the contact. */
+    toMemberInMail: number;
+    /** Left: nobody active owns the company or the contact, and (with `byMailDays`) no member is in mail with them. */
+    nobodyToGive: number;
     /** The members given deals, and the most one of them was given. */
     owners: number;
     mostToOne: number;
@@ -44,11 +61,12 @@ export interface AssignDealsReport {
 }
 
 /**
- * The import left open deals with no owner: on nobody's pipeline, nobody's Dashboard. Each one whose contact has an
- * active owner is given to that owner — unless the deal's company is another active member's, whose it would be
- * (OWN-2) — as an import fills an empty owner: the record service's write and a silent hand-over on the deal's
- * ownership history (`recordHandOverIn`), `JOB_WRITE_CHUNK` per transaction, kept in BylineCRM (`internal`). A member
- * who has left, or a shared mailbox, is nobody (as to the guard). Re-running changes nothing once done. Counts only.
+ * The import left open deals with no owner: on nobody's pipeline, nobody's Dashboard. Each is given to the active
+ * owner of its company (a deal with a company is its owner's, OWN-2), else to the active owner of its contact, else
+ * — with `byMailDays` — to the member most recently in mail with the contact, who is given the contact too. As an
+ * import fills an empty owner: the record service's write and a silent hand-over on the record's ownership history
+ * (`recordHandOverIn`), `JOB_WRITE_CHUNK` per transaction, kept in BylineCRM (`internal`). A member who has left, or
+ * a shared mailbox, is nobody (as to the guard). Re-running changes nothing once done. Counts only.
  */
 export async function assignDealOwners(
     app: INestApplicationContext,
@@ -59,6 +77,7 @@ export async function assignDealOwners(
     const rls = app.get(RlsPrismaService);
     const scope = app.get(WorkspaceContext);
     const deals = app.get(OpportunitiesService);
+    const people = app.get(PeopleService);
     const transfers = app.get(TransfersService);
     const events = app.get(DomainEvents);
     const context = importJobContext(workspaceId);
@@ -68,8 +87,10 @@ export async function assignDealOwners(
     const report: AssignDealsReport = {
         deals: 0,
         assigned: 0,
-        noContactOwner: 0,
-        companyElsewhere: 0,
+        toCompanyOwner: 0,
+        toContactOwner: 0,
+        toMemberInMail: 0,
+        nobodyToGive: 0,
         owners: 0,
         mostToOne: 0,
         failed: 0,
@@ -80,12 +101,31 @@ export async function assignDealOwners(
     const active = (id: string | null) => (id !== null && !nobody.has(id) ? id : null);
     const given = new Map<string, number>();
 
+    const byMailDays = options.byMailDays;
+    if (byMailDays !== undefined && (!Number.isInteger(byMailDays) || byMailDays < 1)) {
+        throw new Error('byMailDays must be a whole number of days, 1 or more');
+    }
+    type Why = 'toCompanyOwner' | 'toContactOwner' | 'toMemberInMail';
+    interface Fill {
+        id: string;
+        to: string;
+        why: Why;
+        /** `toMemberInMail`: the contact, given to the same member. */
+        contactId: string | null;
+    }
+    const REASON: Record<Why, string> = {
+        toCompanyOwner: TRANSFER_REASON_DEAL_COMPANY_OWNER,
+        toContactOwner: TRANSFER_REASON_DEAL_OWNER_FILL,
+        toMemberInMail: TRANSFER_REASON_DEAL_IN_MAIL,
+    };
+
     let after = '00000000-0000-0000-0000-000000000000';
     for (;;) {
         const page = await owner.$queryRaw<
-            { id: string; contact_owner: string | null; company_owner: string | null }[]
+            { id: string; contact_id: string | null; contact_owner: string | null; company_owner: string | null }[]
         >`
-            SELECT d.id::text AS id, p.owner_id::text AS contact_owner, c.owner_id::text AS company_owner
+            SELECT d.id::text AS id, p.id::text AS contact_id, p.owner_id::text AS contact_owner,
+                   c.owner_id::text AS company_owner
             FROM opportunities d
             JOIN pipeline_stages s ON s.id = d.stage_id AND s.kind = 'open'
             LEFT JOIN people p ON p.id = d.point_of_contact_id AND p.deleted_at IS NULL
@@ -95,22 +135,43 @@ export async function assignDealOwners(
             ORDER BY d.id LIMIT ${BATCH}`;
         if (page.length === 0) break;
         report.deals += page.length;
-        const fills: { id: string; to: string }[] = [];
+        const fills: Fill[] = [];
+        const loose: { id: string; contactId: string }[] = [];
         for (const d of page) {
-            const to = active(d.contact_owner);
             const companyOwner = active(d.company_owner);
-            if (!to) report.noContactOwner += 1;
-            else if (companyOwner && companyOwner !== to) report.companyElsewhere += 1;
-            else fills.push({ id: d.id, to });
+            const contactOwner = active(d.contact_owner);
+            if (companyOwner) fills.push({ id: d.id, to: companyOwner, why: 'toCompanyOwner', contactId: null });
+            else if (contactOwner) fills.push({ id: d.id, to: contactOwner, why: 'toContactOwner', contactId: null });
+            else if (byMailDays !== undefined && d.contact_id) loose.push({ id: d.id, contactId: d.contact_id });
+            else report.nobodyToGive += 1;
+        }
+        if (loose.length > 0) {
+            // The member on the newest message with each contact, either way; a member who is nobody is not one.
+            const inMail = await owner.$queryRaw<{ person_id: string; member_id: string }[]>`
+                SELECT DISTINCT ON (mp.person_id) mp.person_id::text AS person_id, sp.member_id::text AS member_id
+                FROM mail_participants mp
+                JOIN mail_messages mm ON mm.id = mp.message_id
+                 AND mm.sent_at >= now() - make_interval(days => ${byMailDays!}::int)
+                JOIN mail_participants sp ON sp.message_id = mm.id AND sp.member_id IS NOT NULL
+                 AND sp.member_id::text <> ALL (${[...nobody]}::text[])
+                WHERE mp.workspace_id = ${workspaceId}::uuid
+                  AND mp.person_id::text = ANY (${loose.map((l) => l.contactId)}::text[])
+                ORDER BY mp.person_id, mm.sent_at DESC`;
+            const memberOf = new Map(inMail.map((r) => [r.person_id, r.member_id]));
+            for (const l of loose) {
+                const to = memberOf.get(l.contactId);
+                if (to) fills.push({ id: l.id, to, why: 'toMemberInMail', contactId: l.contactId });
+                else report.nobodyToGive += 1;
+            }
         }
         for (let at = 0; at < fills.length; at += JOB_WRITE_CHUNK) {
             const chunk = fills.slice(at, at + JOB_WRITE_CHUNK);
-            let done: string[] = chunk.map((f) => f.to);
+            let done: Fill[] = chunk;
             if (options.apply) {
                 try {
                     done = await scope.run(context, () =>
                         rls.withWorkspace(workspaceId, async (tx) => {
-                            const filled: string[] = [];
+                            const filled: Fill[] = [];
                             for (const f of chunk) {
                                 // A deal given an owner, closed or removed since the read is left as it is.
                                 const still = await tx.opportunity.findFirst({
@@ -118,6 +179,23 @@ export async function assignDealOwners(
                                     select: { id: true },
                                 });
                                 if (!still) continue;
+                                if (f.contactId) {
+                                    // The contact first, while nobody active owns them still: theirs, as the deal is.
+                                    const contact = await tx.person.findFirst({
+                                        where: { id: f.contactId, deletedAt: null },
+                                        select: { ownerId: true },
+                                    });
+                                    if (!contact || active(contact.ownerId)) continue;
+                                    const moved = await people.updateIn(tx, context, f.contactId, { ownerId: f.to });
+                                    if (moved.event) await events.record(tx, { ...moved.event, internal: true });
+                                    await transfers.recordHandOverIn(tx, context, {
+                                        from: null,
+                                        to: f.to,
+                                        target: { type: 'person', id: f.contactId },
+                                        reason: REASON[f.why],
+                                        silent: true,
+                                    });
+                                }
                                 const updated = await deals.updateIn(tx, context, f.id, { ownerId: f.to });
                                 if (updated.event) await events.record(tx, { ...updated.event, internal: true });
                                 for (const e of updated.taskEvents) await events.record(tx, { ...e, internal: true });
@@ -125,10 +203,10 @@ export async function assignDealOwners(
                                     from: null,
                                     to: f.to,
                                     target: { type: 'opportunity', id: f.id },
-                                    reason: TRANSFER_REASON_DEAL_OWNER_FILL,
+                                    reason: REASON[f.why],
                                     silent: true,
                                 });
-                                filled.push(f.to);
+                                filled.push(f);
                             }
                             return filled;
                         }),
@@ -140,10 +218,13 @@ export async function assignDealOwners(
                 }
             }
             report.assigned += done.length;
-            for (const to of done) given.set(to, (given.get(to) ?? 0) + 1);
+            for (const f of done) {
+                report[f.why] += 1;
+                given.set(f.to, (given.get(f.to) ?? 0) + 1);
+            }
         }
         after = page[page.length - 1]!.id;
-        progress(`… ${report.deals} open deals without an owner, ${report.assigned} given to their contact’s owner`);
+        progress(`… ${report.deals} open deals without an owner, ${report.assigned} given an owner`);
     }
     report.owners = given.size;
     report.mostToOne = Math.max(0, ...given.values());
@@ -154,6 +235,13 @@ async function main(): Promise<void> {
     const args = process.argv.slice(2);
     const slug = args[0];
     const flags = args.slice(1);
+    let byMailDays: number | undefined;
+    const mail = flags.indexOf('--by-mail');
+    if (mail >= 0) {
+        byMailDays = Number(flags[mail + 1]);
+        if (!Number.isInteger(byMailDays) || byMailDays < 1) throw new Error(USAGE);
+        flags.splice(mail, 2);
+    }
     let batch: number | undefined;
     const at = flags.indexOf('--batch');
     if (at >= 0) {
@@ -174,15 +262,18 @@ async function main(): Promise<void> {
         const report = await assignDealOwners(app, workspace.id, {
             apply,
             batch,
+            byMailDays,
             onProgress: (line) => console.error(line),
         });
         const would = apply ? '' : 'would be ';
         console.log(`${report.deals} open deals without an owner`);
         console.log(
-            `${would}given to their contact’s owner: ${report.assigned}, among ${report.owners} members (at most ${report.mostToOne} to one)`,
+            `${would}given an owner: ${report.assigned}, among ${report.owners} members (at most ${report.mostToOne} to one)`,
         );
-        console.log(`left, no contact or a contact nobody active owns: ${report.noContactOwner}`);
-        console.log(`left, the deal’s company is another member’s: ${report.companyElsewhere}`);
+        console.log(
+            `  the company’s owner: ${report.toCompanyOwner}; the contact’s owner: ${report.toContactOwner}; the member in mail with the contact: ${report.toMemberInMail}`,
+        );
+        console.log(`left, nobody to give them to: ${report.nobodyToGive}`);
         if (apply) console.log(`refused and left as they were: ${report.failed}`);
         else console.log('estimate: nothing changed; add --apply to do it');
     } finally {

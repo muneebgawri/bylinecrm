@@ -179,10 +179,11 @@ describe('close-stale-deals: imported deals idle a year are closed as lost', () 
         taskOnSilent = await task('Call back', [silent]);
         taskOnBoth = await task('Send deck', [silent, touchedInBigin]);
         taskOnKept = await task('Follow up', [touchedInBigin]);
-        // The tasks' own timeline entries are the import's shape too: bookkeeping, not activity.
+        // The tasks' own timeline entries are the import's shape too, as production has them: an activity kind,
+        // dated the day of the import, written by the import — bookkeeping, not activity.
         await owner.timelineActivity.updateMany({
-            where: { kind: { startsWith: 'linked-task.' } },
-            data: { kind: 'linked-task.imported', happenedAt: OLD },
+            where: { workspaceId: workspace, kind: { startsWith: 'linked-task.' } },
+            data: { happenedAt: RECENT, actor: { kind: 'import', id: null } },
         });
         await owner.timelineActivity.create({
             data: {

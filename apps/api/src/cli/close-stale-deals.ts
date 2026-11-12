@@ -43,7 +43,8 @@ export function staleLostReason(months: number, backlog: 'bigin' | 'unowned' | '
  * way (synced, or carried over from Bigin as `external.email`), notes, tasks, calls, meetings, and what NewswireOS
  * reported (an order, a distribution). The rest of the timeline is bookkeeping — `opportunity.updated` and
  * `person.updated` from an import or a recount, stage rows an import wrote, owner fills — and the Bigin backlog
- * has a fresh one of those on every deal, so counting them would make nothing idle.
+ * has a fresh one of those on every deal, so counting them would make nothing idle. An entry of these kinds that an
+ * import wrote (a Bigin task carried over, dated the day it was imported) is bookkeeping too, and is not counted.
  */
 export const ACTIVITY_KIND_PATTERNS: readonly string[] = [
     'linked-email.%',
@@ -152,6 +153,7 @@ export async function findStaleDeals(
             FROM timeline_activities
             WHERE workspace_id = ${workspaceId}::uuid AND target_type IN ('opportunity', 'person')
               AND kind LIKE ANY (${ACTIVITY_KIND_PATTERNS}::text[])
+              AND actor ->> 'kind' <> 'import'
             GROUP BY 1, 2)
         SELECT d.id::text AS id
         FROM d
