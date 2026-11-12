@@ -16,6 +16,7 @@ import { actorOf } from '../records/actor';
 import { RlsPrismaService, type WorkspaceClient } from '../infra/rls-prisma.service';
 import { SecretBox } from '../infra/secret-box';
 import { WorkspaceContext, type WorkspaceRunContext } from '../infra/workspace-context';
+import { purgeCopies } from '../mail-sync/purge';
 import { enrolMailbox } from '../sending-pool/pool-mailbox';
 import { storePostmasterConnection } from '../sending-pool/postmaster-connection';
 import { MembershipService } from '../workspace/membership.service';
@@ -206,6 +207,38 @@ export class MailboxesService {
         // #225: with their own connection gone, a member in an allowed domain syncs through delegation again.
         await this.reconcileDelegation(context.workspaceId);
         return { mailbox: view(after), revoked };
+    }
+
+    /**
+     * Removes a mailbox nobody needs (#385): disconnected first if it still is (the grant revoked, the tokens
+     * wiped), then deleted — with its sync state and bounces, its copies of messages and its thread mappings, its
+     * outbound send records, and, through the one purge every copy goes by (`purgeCopies`), every message no mailbox
+     * holds any more, with its participants and timeline entries. Mail another mailbox also holds stays on its
+     * records. Announced as `mailbox.removed`; the row is gone, so nothing reads the mailbox after.
+     */
+    async remove(id: string): Promise<void> {
+        const context = this.current();
+        const row = await this.rls.withWorkspace((tx) => this.changeable(tx, context, id));
+        if (row.status !== 'disconnected') await this.disconnect(id);
+        await this.rls.withWorkspace(async (tx) => {
+            const copies = await tx.mailMessageCopy.findMany({
+                where: { mailboxId: id },
+                select: { id: true, message: { select: { id: true, threadId: true } } },
+            });
+            const { events } = await purgeCopies(tx, context.workspaceId, copies);
+            await tx.mailboxThread.deleteMany({ where: { mailboxId: id } });
+            await tx.calendarEventCopy.deleteMany({ where: { mailboxId: id } });
+            await tx.mailbox.delete({ where: { id } });
+            await this.events.recordAll(tx, events);
+            await this.events.record(tx, {
+                type: 'mailbox.removed',
+                object: 'mailbox',
+                workspaceId: context.workspaceId,
+                actor: actorOf(context),
+                occurredAt: new Date().toISOString(),
+                recordId: id,
+            });
+        });
     }
 
     /**

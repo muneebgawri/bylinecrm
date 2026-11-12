@@ -1123,9 +1123,12 @@ export class MailSendService {
         }
         if (row.mime === null) return 'skipped';
         const mime = row.mime;
-        const mailbox = await this.rls.withWorkspace(workspaceId, (tx) =>
-            tx.mailbox.findUnique({ where: { id: row.mailboxId } }),
-        );
+        // A send whose mailbox was removed (#385) has nothing to go from: left as it is, like one whose mailbox is gone.
+        const mailbox = row.mailboxId
+            ? await this.rls.withWorkspace(workspaceId, (tx) =>
+                  tx.mailbox.findUnique({ where: { id: row.mailboxId! } }),
+              )
+            : null;
         if (!mailbox) return 'skipped';
         if (mailbox.status !== 'connected') {
             await this.markFailed(workspaceId, id, unavailableError(mailbox.status));
@@ -1749,10 +1752,10 @@ export class MailSendService {
 
     /** The Gmail thread a reply goes into: the one the sending mailbox's copy of the parent is in (#107). */
     private async parentThread(workspaceId: string, row: OutboundRow): Promise<string | null> {
-        if (!row.replyToMessageId) return null;
+        if (!row.replyToMessageId || !row.mailboxId) return null;
         const copy = await this.rls.withWorkspace(workspaceId, (tx) =>
             tx.mailMessageCopy.findFirst({
-                where: { messageId: row.replyToMessageId!, mailboxId: row.mailboxId },
+                where: { messageId: row.replyToMessageId!, mailboxId: row.mailboxId! },
                 select: { mailboxThread: { select: { providerThreadId: true } } },
             }),
         );

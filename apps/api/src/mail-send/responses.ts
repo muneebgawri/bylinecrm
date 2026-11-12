@@ -35,7 +35,9 @@ export const mailOutboundView = named(
     'MailOutbound',
     z.object({
         id,
-        mailboxId: id,
+        mailboxId: id
+            .nullable()
+            .meta({ description: 'The mailbox it went from; null once that mailbox was removed (#385).' }),
         status: z.enum(MAIL_OUTBOUND_STATUSES),
         subject: z.string().meta({
             description:

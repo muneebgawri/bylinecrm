@@ -237,6 +237,17 @@ export class MailboxesController {
     }
 
     /**
+     * Removes the mailbox (#385): disconnects it if it still is, then deletes it with the mail only it held. Mail
+     * another mailbox also holds stays on its records.
+     */
+    @Requires('mailbox:manage')
+    @HttpCode(204)
+    @Post(':mailboxId/remove')
+    remove(@Param('mailboxId', ParseUUIDPipe) mailboxId: string): Promise<void> {
+        return this.mailboxes.remove(mailboxId);
+    }
+
+    /**
      * Moves a shared (pool or service) Gmail mailbox onto the workspace's Google service account (#225): Google must
      * mint a token for its address first, else `409` and nothing changes. Its own grant is revoked once it has moved.
      */

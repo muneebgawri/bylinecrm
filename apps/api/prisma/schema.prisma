@@ -1596,7 +1596,7 @@ enum MailOutboundStatus {
 model MailOutbound {
   id                      String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   workspaceId             String             @map("workspace_id") @db.Uuid
-  mailboxId               String             @map("mailbox_id") @db.Uuid
+  mailboxId               String?            @map("mailbox_id") @db.Uuid
   senderMemberId          String             @map("sender_member_id") @db.Uuid
   /// The person the message is to and about (the template's context).
   personId                String?            @map("person_id") @db.Uuid
@@ -1658,7 +1658,7 @@ model MailOutbound {
   updatedAt               DateTime           @updatedAt @map("updated_at") @db.Timestamptz
 
   workspace   Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  mailbox     Mailbox         @relation(fields: [mailboxId], references: [id], onDelete: Restrict)
+  mailbox     Mailbox?        @relation(fields: [mailboxId], references: [id], onDelete: SetNull)
   sender      WorkspaceMember @relation("MailOutboundSender", fields: [senderMemberId], references: [id])
   person      Person?         @relation(fields: [personId], references: [id], onDelete: SetNull)
   deal        Opportunity?    @relation(fields: [dealId], references: [id], onDelete: SetNull)

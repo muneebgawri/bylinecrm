@@ -224,6 +224,31 @@ describe('FR-CRMS-1, FR-CRMS-2: each mailbox shows where it stands and its sync'
         await userEvent.click(within(dialog).getByRole('button', { name: 'Disconnect' }));
         await waitFor(() => expect(seen.some((r) => r.method === 'DELETE')).toBe(true));
     });
+
+    it('removes a disconnected mailbox only after the page’s own confirmation (#385)', async () => {
+        const gone = mailbox({ id: 'mb-3', email: 'old@example.com', status: 'disconnected' });
+        const seen = api([
+            (r) => (r.method === 'GET' && r.url.endsWith('/mailboxes') ? json([...MAILBOXES, gone]) : undefined),
+            (r) => (r.method === 'POST' && r.url.endsWith('/mailboxes/mb-3/remove') ? json(null, 204) : undefined),
+        ]);
+        page();
+        // A connected mailbox is disconnected, never removed outright.
+        await userEvent.click(await screen.findByRole('button', { name: 'Actions for kate@example.com' }));
+        expect(await screen.findByRole('menuitem', { name: 'Disconnect' })).toBeInTheDocument();
+        expect(screen.queryByRole('menuitem', { name: 'Remove' })).not.toBeInTheDocument();
+        await userEvent.keyboard('{Escape}');
+        await userEvent.click(await screen.findByRole('button', { name: 'Actions for old@example.com' }));
+        expect(screen.queryByRole('menuitem', { name: 'Disconnect' })).not.toBeInTheDocument();
+        await userEvent.click(await screen.findByRole('menuitem', { name: 'Remove' }));
+        const dialog = await screen.findByRole('dialog');
+        expect(within(dialog).getByText(/Mail that only it held is deleted/)).toBeInTheDocument();
+        expect(seen.some((r) => r.url.endsWith('/remove'))).toBe(false);
+        await userEvent.click(within(dialog).getByRole('button', { name: 'Remove' }));
+        await waitFor(() =>
+            expect(seen.some((r) => r.method === 'POST' && r.url.endsWith('/mailboxes/mb-3/remove'))).toBe(true),
+        );
+        expect(await screen.findByText('Removed old@example.com')).toBeInTheDocument();
+    });
 });
 
 describe('#144: who a shared outreach mailbox sends as', () => {
