@@ -1,3 +1,4 @@
+import { DORMANT_OWNER_MONTHS_LIMITS, TRANSFER_COOLING_DAYS_LIMITS } from '@bylinecrm/shared';
 import { Button, DataTableChrome, EmptyState, Field, Input, toast } from '@bylinecrm/ui';
 import { useState, type FormEvent } from 'react';
 import { Link } from 'react-router';
@@ -137,38 +138,56 @@ export function Ownership() {
 }
 
 /**
- * The transfer cooling period (owner decision 2): days a record cannot go back to the member it left — not
- * offered to them, not accepted by them. Managers and admins are exempt. The server is the gate and the range.
+ * Settings → Ownership: the transfer cooling period (owner decision 2) — days a record cannot go back to the member
+ * it left — and when a company's owner lets it go (OWN-2f) — months an owner may leave a company untouched and keep
+ * it. Managers and admins edit; the server is the gate and the range.
  */
 function CoolingSettings() {
     const workspaceId = useWorkspaceId();
     const settings = useOwnershipSettings(workspaceId);
-    return settings.data ? <CoolingForm key={settings.data.transferCoolingDays} settings={settings.data} /> : null;
+    return settings.data ? (
+        <CoolingForm
+            key={`${settings.data.transferCoolingDays}-${settings.data.dormantOwnerMonths}`}
+            settings={settings.data}
+        />
+    ) : null;
+}
+
+/** A whole number from a field, or null when it is not one. */
+function wholeNumber(value: string): number | null {
+    const n = Number(value);
+    return value.trim() !== '' && Number.isInteger(n) ? n : null;
 }
 
 function CoolingForm({ settings }: { settings: OwnershipSettingsView }) {
     const workspaceId = useWorkspaceId();
     const put = usePutOwnershipSettings(workspaceId);
     const edit = usePermission('record:transfer');
-    const [value, setValue] = useState(String(settings.transferCoolingDays));
-    const [local, setLocal] = useState<string | undefined>();
-    const parsed = Number(value);
-    const dirty = parsed !== settings.transferCoolingDays;
+    const [days, setDays] = useState(String(settings.transferCoolingDays));
+    const [months, setMonths] = useState(String(settings.dormantOwnerMonths));
+    const [local, setLocal] = useState<{ days?: string | undefined; months?: string | undefined }>({});
+    const dirty =
+        wholeNumber(days) !== settings.transferCoolingDays || wholeNumber(months) !== settings.dormantOwnerMonths;
 
     const submit = (event: FormEvent) => {
         event.preventDefault();
-        if (value.trim() === '' || !Number.isInteger(parsed)) {
-            setLocal('Enter a whole number of days.');
+        const d = wholeNumber(days);
+        const m = wholeNumber(months);
+        if (d === null || m === null) {
+            setLocal({
+                ...(d === null ? { days: 'Enter a whole number of days.' } : {}),
+                ...(m === null ? { months: 'Enter a whole number of months.' } : {}),
+            });
             return;
         }
         put.mutate(
-            { transferCoolingDays: parsed },
+            { transferCoolingDays: d, dormantOwnerMonths: m },
             {
-                onSuccess: () => toast({ title: 'Transfer cooling period saved' }),
+                onSuccess: () => toast({ title: 'Ownership settings saved' }),
                 onError: (e) => {
                     if (!(e instanceof ApiError) || e.fieldErrors.length === 0) {
                         toast({
-                            title: 'The cooling period was not saved',
+                            title: 'The ownership settings were not saved',
                             description: failureText(e),
                             tone: 'danger',
                         });
@@ -188,18 +207,43 @@ function CoolingForm({ settings }: { settings: OwnershipSettingsView }) {
                 <Field
                     label="Transfer cooling period (days)"
                     hint="After a transfer, the record cannot go back to the member it left for this many days. Managers and admins are exempt. 0 turns it off; the default is 14."
-                    error={local ?? fieldErrorAt(put.error, 'transferCoolingDays')}
+                    error={local.days ?? fieldErrorAt(put.error, 'transferCoolingDays')}
                 >
                     <Input
                         type="number"
                         inputMode="numeric"
-                        min={0}
-                        max={90}
+                        min={TRANSFER_COOLING_DAYS_LIMITS.min}
+                        max={TRANSFER_COOLING_DAYS_LIMITS.max}
                         step={1}
-                        value={value}
+                        value={days}
                         onChange={(e) => {
-                            setValue(e.target.value);
-                            setLocal(undefined);
+                            setDays(e.target.value);
+                            setLocal((now) => ({ ...now, days: undefined }));
+                        }}
+                        className="max-w-[10rem]"
+                    />
+                </Field>
+            </SettingsSection>
+            <SettingsSection
+                title="Inactive account owners"
+                description="When a company stops being held by an owner who no longer works it."
+                disabled={!edit.allowed}
+            >
+                <Field
+                    label="Release an account after (months)"
+                    hint="An owner with no open deal, no email, and nothing added or logged at a company for this many months no longer holds it: any member may email its contacts, and the next member to add a contact there becomes its owner. 0 turns it off; the default is 6."
+                    error={local.months ?? fieldErrorAt(put.error, 'dormantOwnerMonths')}
+                >
+                    <Input
+                        type="number"
+                        inputMode="numeric"
+                        min={DORMANT_OWNER_MONTHS_LIMITS.min}
+                        max={DORMANT_OWNER_MONTHS_LIMITS.max}
+                        step={1}
+                        value={months}
+                        onChange={(e) => {
+                            setMonths(e.target.value);
+                            setLocal((now) => ({ ...now, months: undefined }));
                         }}
                         className="max-w-[10rem]"
                     />

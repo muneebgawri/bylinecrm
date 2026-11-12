@@ -23,6 +23,7 @@ import { labelled, labelTargets } from '../notifications/task-labels';
 import { actorOf } from '../records/actor';
 import { recordWhere } from '../records/record-scope';
 import { MEMBER_SUMMARY_SELECT } from '../records/summaries';
+import { dormantOwnerMonths } from '../records/company-ownership';
 import { assertNotCooling, coolingDays } from './transfer-cooling';
 
 /** The reason on a hand-over that gave an owner to a record that had none, from an import's source (Bigin). */
@@ -164,20 +165,24 @@ export class TransfersService {
         });
     }
 
-    /** Settings → Ownership: the transfer cooling period. */
+    /** Settings → Ownership: the transfer cooling period and when a company's owner lets it go (OWN-2f). */
     settings(): Promise<OwnershipSettingsView> {
-        return this.rls.withWorkspace(async (tx) => ({ transferCoolingDays: await coolingDays(tx) }));
+        return this.rls.withWorkspace(async (tx) => ({
+            transferCoolingDays: await coolingDays(tx),
+            dormantOwnerMonths: await dormantOwnerMonths(tx),
+        }));
     }
 
     setSettings(input: OwnershipSettingsView): Promise<OwnershipSettingsView> {
         const workspaceId = this.current().workspaceId;
+        const data = { transferCoolingDays: input.transferCoolingDays, dormantOwnerMonths: input.dormantOwnerMonths };
         return this.rls.withWorkspace(async (tx) => {
             const row = await tx.ownershipSettings.upsert({
                 where: { workspaceId },
-                create: { workspaceId, transferCoolingDays: input.transferCoolingDays },
-                update: { transferCoolingDays: input.transferCoolingDays },
+                create: { workspaceId, ...data },
+                update: data,
             });
-            return { transferCoolingDays: row.transferCoolingDays };
+            return { transferCoolingDays: row.transferCoolingDays, dormantOwnerMonths: row.dormantOwnerMonths };
         });
     }
 

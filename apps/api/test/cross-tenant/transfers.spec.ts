@@ -240,9 +240,13 @@ describe('OWN-1 ownership transfers (FR-CRMS-17) and the manager role (FR-CRMS-1
         const put = (who: Browser) =>
             http().put(w('/ownership/settings')).set('Cookie', who.cookie).set(CSRF_HEADER, who.csrf);
         // The default, readable by any member; only a manager (or admin) changes it.
-        expect((await as(ana).get(w('/ownership/settings')).expect(200)).body).toEqual({ transferCoolingDays: 14 });
-        expect((await put(ana).send({ transferCoolingDays: 0 })).status).toBe(403);
-        expect((await put(mia).send({ transferCoolingDays: 91 })).status).toBe(400);
+        expect((await as(ana).get(w('/ownership/settings')).expect(200)).body).toEqual({
+            transferCoolingDays: 14,
+            dormantOwnerMonths: 6,
+        });
+        expect((await put(ana).send({ transferCoolingDays: 0, dormantOwnerMonths: 6 })).status).toBe(403);
+        expect((await put(mia).send({ transferCoolingDays: 91, dormantOwnerMonths: 6 })).status).toBe(400);
+        expect((await put(mia).send({ transferCoolingDays: 14, dormantOwnerMonths: 37 })).status).toBe(400);
 
         // The previous test moved the unit from Ana to Ben. Offering it straight back is refused — the company, and
         // the deal that moved with it.
@@ -267,14 +271,14 @@ describe('OWN-1 ownership transfers (FR-CRMS-17) and the manager role (FR-CRMS-1
         ).toBe(409);
 
         // A proposal made while the period was off cannot be accepted by Ana once it is back on.
-        await put(mia).send({ transferCoolingDays: 0 }).expect(200);
+        await put(mia).send({ transferCoolingDays: 0, dormantOwnerMonths: 6 }).expect(200);
         const offer = (
             await as(ben)
                 .post(w('/transfers'))
                 .send({ object: 'opportunity', recordId: deal, toMemberId: anaId })
                 .expect(201)
         ).body as TransferView;
-        await put(mia).send({ transferCoolingDays: 14 }).expect(200);
+        await put(mia).send({ transferCoolingDays: 14, dormantOwnerMonths: 6 }).expect(200);
         const accept = await as(ana).post(w(`/transfers/${offer.id}/accept`));
         expect(accept.status).toBe(409);
         expect((accept.body as { code: string; message: string }).message).toMatch(/away from you/);

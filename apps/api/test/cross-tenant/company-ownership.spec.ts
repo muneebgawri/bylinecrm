@@ -59,6 +59,7 @@ describe('OWN-2 company-domain ownership (FR-CRMS-20)', () => {
         get: (path: string) => http().get(path).set('Cookie', who.cookie),
         post: (path: string) => http().post(path).set('Cookie', who.cookie).set(CSRF_HEADER, who.csrf),
         patch: (path: string) => http().patch(path).set('Cookie', who.cookie).set(CSRF_HEADER, who.csrf),
+        put: (path: string) => http().put(path).set('Cookie', who.cookie).set(CSRF_HEADER, who.csrf),
     });
     const w = (path: string) => `/api/w/${workspace}${path}`;
     const person = (local: string, extra: Record<string, unknown> = {}) => ({
@@ -743,6 +744,39 @@ describe('OWN-2 company-domain ownership (FR-CRMS-20)', () => {
                 .send({ nameFirst: 'Kim', emails: { primary: `kim@${pike}`, additional: [] } });
             expect(back.status, JSON.stringify(back.body)).toBe(409);
             expect(back.body).toMatchObject({ details: { ownerMemberId: benId } });
+        });
+
+        it('OWN-2f: a workspace that sets the months to 0 keeps every owner, however long a company is left', async () => {
+            const quay = `quay-${stamp}.test`;
+            const companyId = await unowned(`Quay ${stamp}`, quay);
+            await as(ana)
+                .post(w('/people'))
+                .send({ nameFirst: 'Pia', emails: { primary: `pia@${quay}`, additional: [] } })
+                .expect(201);
+            await settle(app);
+            const prisma = app.get(PrismaService);
+            const old = new Date(Date.now() - 3 * 365 * 24 * 60 * 60 * 1000);
+            const people = await prisma.person.findMany({ where: { companyId }, select: { id: true } });
+            await prisma.company.update({ where: { id: companyId }, data: { createdAt: old } });
+            await prisma.person.updateMany({ where: { companyId }, data: { createdAt: old } });
+            await prisma.timelineActivity.updateMany({
+                where: { workspaceId: workspace, targetId: { in: [companyId, ...people.map((p) => p.id)] } },
+                data: { happenedAt: old },
+            });
+            const off = { transferCoolingDays: 14, dormantOwnerMonths: 0 };
+            await as(admin).put(w('/ownership/settings')).send(off).expect(200);
+            try {
+                const refused = await as(ben)
+                    .post(w('/people'))
+                    .send({ nameFirst: 'Rae', emails: { primary: `rae@${quay}`, additional: [] } });
+                expect(refused.status, JSON.stringify(refused.body)).toBe(409);
+                expect(refused.body).toMatchObject({ details: { ownerMemberId: anaId } });
+            } finally {
+                await as(admin)
+                    .put(w('/ownership/settings'))
+                    .send({ ...off, dormantOwnerMonths: 6 })
+                    .expect(200);
+            }
         });
     });
 });

@@ -1,6 +1,7 @@
 import { Body, Delete, Get, HttpCode, Param, ParseUUIDPipe, Post, Put } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import {
+    DORMANT_OWNER_MONTHS_LIMITS,
     TRANSFER_COOLING_DAYS_LIMITS,
     type CompanyDomainView,
     type OwnershipConflictView,
@@ -34,6 +35,15 @@ const ownershipSettingsShape = z.object({
         .meta({
             description:
                 'Days after a transfer during which the record cannot go back to the member it left (not offered to them, not accepted by them). Managers and admins are exempt. 0 turns it off.',
+        }),
+    dormantOwnerMonths: z
+        .number()
+        .int()
+        .min(DORMANT_OWNER_MONTHS_LIMITS.min)
+        .max(DORMANT_OWNER_MONTHS_LIMITS.max)
+        .meta({
+            description:
+                'OWN-2f: months after which a company owner who has not worked it (no open deal, no mail, nothing saved or done there, no hand-over to them) holds it for nobody: its leads are anyone’s, and the next member to save a person there takes it over. 0 turns it off.',
         }),
 });
 class OwnershipSettingsDto extends createZodDto(ownershipSettingsShape) {}
