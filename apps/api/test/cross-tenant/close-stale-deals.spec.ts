@@ -299,7 +299,43 @@ describe('close-stale-deals: imported deals idle a year are closed as lost', () 
             select: { closedAt: true, lostReason: true, lostReasonCode: true },
         });
         expect(closed.closedAt).not.toBeNull();
-        expect(closed).toMatchObject({ lostReason: staleLostReason(MONTHS, true), lostReasonCode: 'no_response' });
+        expect(closed).toMatchObject({ lostReason: staleLostReason(MONTHS, 'unowned'), lostReasonCode: 'no_response' });
         expect((await unowned(true)).stale).toBe(0);
+    });
+    it('--new-of closes the named members’ never-worked imported deals: first stage, no amount, idle', async () => {
+        const members = (await as(admin).get(w('/members')).expect(200)).body as { id: string }[];
+        const me = members[0]!.id;
+        const run = (apply: boolean, newOf: string[]) =>
+            closeStaleDeals(app, workspace, { apply, months: MONTHS, newOf });
+        // `touchedInBigin` is still open, in the first stage: made the admin's, imported, idle and with no amount.
+        await owner.biginImportLink.updateMany({
+            where: { localId: touchedInBigin },
+            data: { externalUpdatedAt: OLD },
+        });
+        await owner.opportunity.update({
+            where: { id: touchedInBigin },
+            data: { ownerId: me, createdBy: { kind: 'import', id: null }, amountMinor: null },
+        });
+        await owner.timelineActivity.updateMany({
+            where: { targetType: 'opportunity', targetId: touchedInBigin, kind: { startsWith: 'linked-task.' } },
+            data: { happenedAt: OLD },
+        });
+        const before = (await run(false, [me])).stale;
+        expect(before).toBeGreaterThanOrEqual(1);
+        expect((await run(false, ['00000000-0000-0000-0000-000000000000'])).stale, 'another member’s').toBe(0);
+        // Priced, it was worked: left.
+        await owner.opportunity.update({ where: { id: touchedInBigin }, data: { amountMinor: 5000n } });
+        expect((await run(false, [me])).stale).toBe(before - 1);
+        await owner.opportunity.update({ where: { id: touchedInBigin }, data: { amountMinor: null } });
+        await run(true, [me]);
+        const closed = await owner.opportunity.findUniqueOrThrow({
+            where: { id: touchedInBigin },
+            select: { closedAt: true, lostReason: true },
+        });
+        expect(closed.closedAt).not.toBeNull();
+        expect(closed.lostReason).toBe(staleLostReason(MONTHS, 'new'));
+        await expect(closeStaleDeals(app, workspace, { apply: false, unowned: true, newOf: [me] })).rejects.toThrow(
+            'one backlog',
+        );
     });
 });
