@@ -23,8 +23,77 @@ export function bareDomain(value: string): string {
 const FREE_MAIL =
     /^(gmail|googlemail|yahoo|ymail|rocketmail|hotmail|outlook|live|msn|icloud|me|mac|aol|proton|protonmail|gmx|mail|yandex|zoho|fastmail|hey|tutanota|tuta|pm)\.[a-z.]+$/i;
 
+/**
+ * Consumer mailboxes an internet provider or a portal hands out, by their exact domain: the provider's own staff
+ * write from another (`verizon.com`, not `verizon.net`), so these cannot be listed by name alone as `FREE_MAIL` is.
+ * A "company" at one of these would be one member's account holding every subscriber's address.
+ */
+const CONSUMER_MAIL: ReadonlySet<string> = new Set([
+    // North America
+    'comcast.net',
+    'att.net',
+    'bellsouth.net',
+    'sbcglobal.net',
+    'verizon.net',
+    'cox.net',
+    'charter.net',
+    'earthlink.net',
+    'optonline.net',
+    'rr.com',
+    'roadrunner.com',
+    'juno.com',
+    'netzero.net',
+    'windstream.net',
+    'centurylink.net',
+    'frontiernet.net',
+    'shaw.ca',
+    'telus.net',
+    'sympatico.ca',
+    'videotron.ca',
+    // Europe
+    'btinternet.com',
+    'ntlworld.com',
+    'talktalk.net',
+    'blueyonder.co.uk',
+    'web.de',
+    't-online.de',
+    'freenet.de',
+    'orange.fr',
+    'wanadoo.fr',
+    'free.fr',
+    'laposte.net',
+    'sfr.fr',
+    'libero.it',
+    'virgilio.it',
+    'seznam.cz',
+    'wp.pl',
+    'o2.pl',
+    'bluewin.ch',
+    // Asia-Pacific
+    'naver.com',
+    'daum.net',
+    'hanmail.net',
+    '163.com',
+    '126.com',
+    'yeah.net',
+    '139.com',
+    'qq.com',
+    'foxmail.com',
+    'sina.com',
+    'sina.cn',
+    'sohu.com',
+    'aliyun.com',
+    'rediffmail.com',
+    'bigpond.com',
+    'optusnet.com.au',
+    // Anyone's
+    'email.com',
+    'duck.com',
+]);
+
 export function isFreeMailDomain(domain: string): boolean {
-    return FREE_MAIL.test(domain.trim().toLowerCase());
+    const bare = domain.trim().toLowerCase();
+    return FREE_MAIL.test(bare) || CONSUMER_MAIL.has(bare);
 }
 
 /** The bare domain an address is at when it can be a company's; null for free mail or no domain. */
