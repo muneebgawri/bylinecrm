@@ -614,6 +614,23 @@ export class MailSyncService {
         };
         const blocklist = await this.blocklistFor(run.mailbox);
         let sampleLeft = mode.kind === 'estimate' ? (mode.sample ?? Infinity) : Infinity;
+        // The addresses of everyone the window stored mail for: their contact status is re-derived once the window
+        // is walked (or the budget stops it), not message by message — their events are flagged historical, and the
+        // outbox fell hours behind re-deriving per message. A frequent correspondent appears in most chunks, and a
+        // refresh reads all of a person's mail, so the window refreshes each person once,
+        // `MAIL_BACKFILL_REFRESH_BATCH` people per transaction: no one transaction reads a crowd's mail.
+        const addresses = new Set<string>();
+        const refreshStored = async (): Promise<void> => {
+            if (addresses.size === 0) return;
+            const people = await this.rls.withWorkspace(run.mailbox.workspaceId, (tx) =>
+                personsByAddress(tx, [...addresses]),
+            );
+            const ids = [...new Set(people.values())];
+            for (let at = 0; at < ids.length; at += MAIL_BACKFILL_REFRESH_BATCH) {
+                const batch = ids.slice(at, at + MAIL_BACKFILL_REFRESH_BATCH);
+                await this.rls.withWorkspace(run.mailbox.workspaceId, (tx) => refreshContactStatus(tx, batch));
+            }
+        };
         for (let start = 0; start < unique.length; start += GMAIL_LIST_PAGE_SIZE) {
             const chunk = unique.slice(start, start + GMAIL_LIST_PAGE_SIZE);
             const known = await this.knownIds(run.mailbox, chunk);
@@ -633,7 +650,6 @@ export class MailSyncService {
             }
             const totals = { imported: 0, duplicates: 0, skippedByLabel: 0, blocked: 0, vanished: 0 };
             let bytes = 0;
-            const addresses = new Set<string>();
             await this.fetchAndStore(
                 run,
                 matched,
@@ -645,24 +661,15 @@ export class MailSyncService {
                 },
                 true,
             );
-            // Their events are flagged historical, so contact status is not re-derived message by message (the
-            // outbox fell hours behind that way): the people this chunk stored mail for are refreshed here, once,
-            // `MAIL_BACKFILL_REFRESH_BATCH` per transaction so no one transaction reads hundreds of people's mail.
-            if (addresses.size > 0) {
-                const people = await this.rls.withWorkspace(run.mailbox.workspaceId, (tx) =>
-                    personsByAddress(tx, [...addresses]),
-                );
-                const ids = [...new Set(people.values())];
-                for (let at = 0; at < ids.length; at += MAIL_BACKFILL_REFRESH_BATCH) {
-                    const batch = ids.slice(at, at + MAIL_BACKFILL_REFRESH_BATCH);
-                    await this.rls.withWorkspace(run.mailbox.workspaceId, (tx) => refreshContactStatus(tx, batch));
-                }
-            }
             const done = addProgress(delta, totals);
             for (const key of Object.keys(done) as (keyof BackfillProgress)[]) counts[key] += done[key];
             counts.matched += matched.length;
-            if (await mode.chunkDone(done, bytes)) return 'budget_reached';
+            if (await mode.chunkDone(done, bytes)) {
+                await refreshStored();
+                return 'budget_reached';
+            }
         }
+        await refreshStored();
         return counts;
     }
 
