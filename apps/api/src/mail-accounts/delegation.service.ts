@@ -260,6 +260,54 @@ export class DelegationService {
     }
 
     /**
+     * A token for a shared (pool or service) mailbox about to move onto the service account, which proves the
+     * Admin console lets the service account act as its address. Refused with `409` — and nothing changes —
+     * while delegation is not active, when the address is outside the allowed domains, or when Google will not
+     * mint for it. The caller stores the token with the move and audits it with `noteSharedDelegated`.
+     */
+    async mintForShared(workspaceId: string, email: string): Promise<DelegatedToken & { scopes: string[] }> {
+        const settings = await this.rls.withWorkspace(workspaceId, (tx) => tx.googleWorkspaceDelegation.findFirst());
+        if (!settings || !isActive(settings)) {
+            throw new ApiException(
+                409,
+                'conflict',
+                'Workspace delegation is not set up; set it up in Settings → Google first',
+            );
+        }
+        if (!inAllowedDomains(email, settings.allowedDomains)) {
+            throw new ApiException(
+                409,
+                'conflict',
+                `${email} is not in an allowed domain (${settings.allowedDomains.join(', ')}); add its domain in Settings → Google first`,
+            );
+        }
+        try {
+            return await this.mint(workspaceId, email);
+        } catch (error) {
+            if (!(error instanceof GoogleOAuthError)) throw error;
+            throw new ApiException(
+                409,
+                'conflict',
+                `Google refused the Workspace delegation for ${email} (${error.error}); the mailbox keeps its own connection`,
+            );
+        }
+    }
+
+    /** Audits a shared mailbox moved onto the service account, in the transaction that moves it. */
+    async noteSharedDelegated(
+        tx: WorkspaceClient,
+        workspaceId: string,
+        actorMemberId: string | null,
+        mailbox: Pick<MailboxRow, 'id' | 'email' | 'purpose'>,
+    ): Promise<void> {
+        await audit(tx, workspaceId, 'shared_delegated', {
+            ...(actorMemberId ? { actorMemberId } : {}),
+            mailboxId: mailbox.id,
+            detail: { email: mailbox.email, purpose: mailbox.purpose },
+        });
+    }
+
+    /**
      * Audits a delegated mailbox's first sync — the first ever, or the first since it stopped, failed or
      * was excluded — and none of the syncs after it. A mailbox with its own grant is never logged.
      */
@@ -335,8 +383,9 @@ export class DelegationService {
 
     /**
      * One workspace: a delegated mailbox for each member who should have one (created, or brought back with
-     * its sync history), and every other delegated mailbox disconnected. An address that is someone else's
-     * live mailbox, or a pool mailbox's, is left alone.
+     * its sync history), shared mailboxes moved onto delegation kept while their domain is allowed, and every
+     * other delegated mailbox disconnected. An address that is someone else's live mailbox, or a pool mailbox's,
+     * is left alone.
      */
     async reconcile(workspaceId: string): Promise<void> {
         await this.rls.withWorkspace(workspaceId, async (tx) => {
@@ -390,6 +439,26 @@ export class DelegationService {
                             accessExpiresAt: null,
                             connectedAt: new Date(),
                         },
+                    });
+                }
+            }
+            // A shared (pool or service) mailbox an admin moved onto the service account stays on it while
+            // delegation is active and its address is in an allowed domain; it is never created or brought back here.
+            const domains = settings?.allowedDomains ?? [];
+            for (const row of plan.byEmail.values()) {
+                if (
+                    row.credentialSource !== 'delegation' ||
+                    row.purpose === 'personal' ||
+                    row.status === 'disconnected'
+                ) {
+                    continue;
+                }
+                if (!plan.active || !inAllowedDomains(row.email, domains)) continue;
+                desired.add(row.email);
+                if (!sameScopes(row.grantedScopes, scopes)) {
+                    await tx.mailbox.update({
+                        where: { id: row.id },
+                        data: { grantedScopes: scopes, accessTokenCiphertext: null, accessExpiresAt: null },
                     });
                 }
             }

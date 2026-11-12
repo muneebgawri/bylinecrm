@@ -169,7 +169,7 @@ export class MailboxesService {
         const context = this.current();
         const row = await this.rls.withWorkspace((tx) => this.changeable(tx, context, id));
         if (row.status === 'disconnected') return { mailbox: view(row), revoked: false };
-        if (row.credentialSource === 'delegation') {
+        if (row.credentialSource === 'delegation' && row.purpose === 'personal') {
             throw new ApiException(
                 409,
                 'conflict',
@@ -177,18 +177,8 @@ export class MailboxesService {
             );
         }
 
-        let revoked = false;
-        if (row.refreshTokenCiphertext) {
-            try {
-                await this.google.revoke(this.secrets.open(row.refreshTokenCiphertext));
-                revoked = true;
-            } catch (error) {
-                if (!(error instanceof GoogleOAuthError)) throw error;
-                // The tokens are wiped below regardless; Google keeps the grant until its owner
-                // removes it in their account, and nothing here can use it any more.
-                this.logger.warn(`mailbox ${row.id}: revoke not confirmed by Google (${error.error})`);
-            }
-        }
+        // A shared mailbox on delegation has no grant of its own to give up: it just stops.
+        const revoked = await this.revokeGrant(row);
         const after = await this.rls.withWorkspace(async (tx) => {
             const disconnected = await tx.mailbox.update({
                 where: { id },
@@ -216,6 +206,59 @@ export class MailboxesService {
         // #225: with their own connection gone, a member in an allowed domain syncs through delegation again.
         await this.reconcileDelegation(context.workspaceId);
         return { mailbox: view(after), revoked };
+    }
+
+    /**
+     * Moves a shared (pool or service) Gmail mailbox off its own Google grant onto the workspace's service account
+     * (#225), so a scope change is made once in the Admin console instead of by reconnecting it. Google must mint a
+     * token for its address first — a refusal changes nothing. The same row moves, with its sync history; its own
+     * grant is revoked once the move is stored. A disconnected shared mailbox comes back this way too. A member's
+     * own mailbox moves by being disconnected instead (delegation takes it over).
+     */
+    async useDelegation(id: string): Promise<MailboxView> {
+        const context = this.current();
+        const row = await this.rls.withWorkspace((tx) => this.changeable(tx, context, id));
+        if (row.purpose === 'personal') {
+            throw new ApiException(
+                409,
+                'conflict',
+                'a member’s own mailbox moves to Workspace delegation when it is disconnected; delegation then takes it over',
+            );
+        }
+        if (row.transport !== 'gmail') {
+            throw new ApiException(409, 'conflict', 'only a Gmail mailbox syncs through Workspace delegation');
+        }
+        if (row.credentialSource === 'delegation' && row.status !== 'disconnected') return view(row);
+
+        const minted = await this.delegation.mintForShared(context.workspaceId, row.email);
+        const after = await this.rls.withWorkspace(async (tx) => {
+            const moved = await tx.mailbox.update({
+                where: { id },
+                data: {
+                    credentialSource: 'delegation',
+                    status: 'connected',
+                    refreshTokenCiphertext: null,
+                    accessTokenCiphertext: this.secrets.seal(minted.accessToken),
+                    accessExpiresAt: new Date(Date.now() + minted.expiresInS * 1000),
+                    grantedScopes: minted.scopes,
+                    lastError: Prisma.DbNull,
+                    delegationAuditedAt: null,
+                    ...(row.status === 'disconnected' ? { connectedAt: new Date() } : {}),
+                },
+            });
+            await this.delegation.noteSharedDelegated(tx, context.workspaceId, context.memberId ?? null, moved);
+            await this.events.record(tx, {
+                type: 'mailbox.connected',
+                object: 'mailbox',
+                workspaceId: context.workspaceId,
+                actor: actorOf(context),
+                occurredAt: new Date().toISOString(),
+                recordId: id,
+            });
+            return moved;
+        });
+        await this.revokeGrant(row);
+        return view(after);
     }
 
     /**
@@ -477,6 +520,22 @@ export class MailboxesService {
     // ── Internals ────────────────────────────────────────────────────────────────────────────
 
     /** Delegation catches up now rather than at the next sync tick; a failure waits for that tick. */
+    /**
+     * Gives up a mailbox's own Google grant; true when Google confirms it. The caller wipes the stored tokens
+     * regardless: Google keeps an unconfirmed grant until its owner removes it, and nothing here can use it.
+     */
+    private async revokeGrant(row: MailboxRow): Promise<boolean> {
+        if (row.credentialSource !== 'oauth' || !row.refreshTokenCiphertext) return false;
+        try {
+            await this.google.revoke(this.secrets.open(row.refreshTokenCiphertext));
+            return true;
+        } catch (error) {
+            if (!(error instanceof GoogleOAuthError)) throw error;
+            this.logger.warn(`mailbox ${row.id}: revoke not confirmed by Google (${error.error})`);
+            return false;
+        }
+    }
+
     private async reconcileDelegation(workspaceId: string): Promise<void> {
         try {
             await this.delegation.reconcile(workspaceId);

@@ -19,6 +19,7 @@ import { type CountedPage, countTotal, EMPTY_COUNTED_PAGE, paginate } from './li
 import { listScope } from '../query/query.service';
 import { countRows } from '../query/rows';
 import { recordWhere, resolveOwner } from './record-scope';
+import { assertContactAddress } from './not-a-contact';
 import { assertCompanyExists, assertOwnerIsMember, compact, stored } from './references';
 import { OpportunitiesService } from './opportunities.service';
 import type { MoneyInput } from './references';
@@ -257,6 +258,8 @@ export class PeopleService implements BulkRecords {
     ): Promise<{ row: PersonRow; event: DomainEvent }> {
         let ownerId = resolveOwner(context, input.ownerId, undefined);
         await assertOwnerIsMember(tx, ownerId);
+        // #383: a colleague's or an automated sender's address is nobody's contact.
+        await assertContactAddress(tx, input.emails?.primary);
         // OWN-2: a person at another member's company is theirs — refused here, by name; at a company
         // the saver may hold, linked to it by their address's domain; a company nobody owns is claimed for
         // the saver in this transaction (OWN-2d).
@@ -303,6 +306,8 @@ export class PeopleService implements BulkRecords {
         // is held to the company's owner like a new person.
         const companyChanged = patch.companyId != null && patch.companyId !== current.companyId;
         const newPrimary = patch.emails?.primary;
+        // #383: as on create — an edit cannot turn a contact into a colleague or an automated sender.
+        if (newPrimary !== undefined && newPrimary !== current.emailPrimary) await assertContactAddress(tx, newPrimary);
         const addressChanged =
             current.companyId === null &&
             patch.companyId === undefined &&

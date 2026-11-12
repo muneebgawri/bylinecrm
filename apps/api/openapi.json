@@ -13677,6 +13677,79 @@
                 "tags": ["mail"]
             }
         },
+        "/api/w/{workspaceId}/mailboxes/{mailboxId}/delegation": {
+            "post": {
+                "operationId": "mailboxes_useDelegation",
+                "parameters": [
+                    {
+                        "name": "mailboxId",
+                        "required": true,
+                        "in": "path",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "workspaceId",
+                        "required": true,
+                        "in": "path",
+                        "description": "The workspace",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Mailbox"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "4XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "5XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    }
+                },
+                "tags": ["mail"]
+            }
+        },
         "/api/w/{workspaceId}/mailboxes/{mailboxId}/check": {
             "post": {
                 "operationId": "mailboxes_check",
@@ -37219,7 +37292,8 @@
                             "member_excluded",
                             "member_included",
                             "sync_started",
-                            "sync_failed"
+                            "sync_failed",
+                            "shared_delegated"
                         ]
                     },
                     "actorMemberId": {
