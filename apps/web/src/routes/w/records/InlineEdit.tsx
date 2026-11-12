@@ -18,6 +18,7 @@ export interface InlineProps {
     canEdit: boolean;
     /** Why editing is not offered; the tooltip (FR-CRMS-UI-6). */
     reason?: string | undefined;
+    /** Saves the value. Resolving `false` calls the save off (a declined confirmation): the field shows what it had. */
     onSave: (value: string | null) => Promise<unknown>;
     className?: string;
 }
@@ -245,7 +246,11 @@ export function InlineSelect({
         const previous = shown;
         setShown(resolved);
         try {
-            await onSave(resolved);
+            // `false`: the save was called off (a confirmation declined) — the field shows what it had.
+            if ((await onSave(resolved)) === false) {
+                setShown(previous);
+                return;
+            }
             setError(null);
         } catch (e) {
             setShown(previous);

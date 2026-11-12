@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { request } from './client';
 import { workspacePath } from './endpoints';
 import type { RecordObject } from '@bylinecrm/shared';
-import type { TransferView } from './types';
+import type { TransferPreviewView, TransferView } from './types';
 
 /**
  * Ownership transfers (OWN-1, #200): a record's offers and history, and the four things a member does
@@ -23,6 +23,15 @@ export const transfers = {
             'GET',
             workspacePath(workspaceId, `/transfers?object=${object}&recordId=${encodeURIComponent(recordId)}`),
             { signal },
+        ),
+    /** OWN-1b: what a manager's move would take, and from whom (managers only). */
+    preview: (workspaceId: string, input: { object: RecordObject; recordId: string; toMemberId: string }) =>
+        request<TransferPreviewView>(
+            'GET',
+            workspacePath(
+                workspaceId,
+                `/transfers/preview?object=${input.object}&recordId=${encodeURIComponent(input.recordId)}&toMemberId=${encodeURIComponent(input.toMemberId)}`,
+            ),
         ),
     propose: (
         workspaceId: string,

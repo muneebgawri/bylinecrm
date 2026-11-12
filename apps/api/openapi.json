@@ -10555,6 +10555,100 @@
                 "tags": ["transfers"]
             }
         },
+        "/api/w/{workspaceId}/transfers/preview": {
+            "get": {
+                "operationId": "transfers_preview",
+                "parameters": [
+                    {
+                        "name": "object",
+                        "required": true,
+                        "in": "query",
+                        "schema": {
+                            "type": "string",
+                            "enum": ["person", "company", "opportunity"]
+                        }
+                    },
+                    {
+                        "name": "recordId",
+                        "required": true,
+                        "in": "query",
+                        "schema": {
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "toMemberId",
+                        "required": true,
+                        "in": "query",
+                        "schema": {
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "workspaceId",
+                        "required": true,
+                        "in": "path",
+                        "description": "The workspace",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/TransferPreview"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "4XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "5XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    }
+                },
+                "tags": ["transfers"]
+            }
+        },
         "/api/w/{workspaceId}/transfers/{transferId}/accept": {
             "post": {
                 "operationId": "transfers_accept",
@@ -36725,6 +36819,58 @@
                     "createdAt",
                     "decidedAt"
                 ]
+            },
+            "TransferPreview": {
+                "type": "object",
+                "properties": {
+                    "losers": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "member": {
+                                    "nullable": true,
+                                    "description": "Null for records nobody owns.",
+                                    "allOf": [
+                                        {
+                                            "$ref": "#/components/schemas/TransferMember"
+                                        }
+                                    ]
+                                },
+                                "companies": {
+                                    "type": "integer",
+                                    "minimum": -9007199254740991,
+                                    "maximum": 9007199254740991
+                                },
+                                "people": {
+                                    "type": "integer",
+                                    "minimum": -9007199254740991,
+                                    "maximum": 9007199254740991
+                                },
+                                "deals": {
+                                    "type": "integer",
+                                    "minimum": -9007199254740991,
+                                    "maximum": 9007199254740991
+                                },
+                                "names": {
+                                    "type": "array",
+                                    "items": {
+                                        "type": "string"
+                                    },
+                                    "description": "Some of the records’ names, people and deals first."
+                                }
+                            },
+                            "required": ["member", "companies", "people", "deals", "names"]
+                        },
+                        "description": "Who loses what, the most first. The receiver’s own records are left out."
+                    },
+                    "total": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                    }
+                },
+                "required": ["losers", "total"]
             },
             "RotationSettings": {
                 "type": "object",

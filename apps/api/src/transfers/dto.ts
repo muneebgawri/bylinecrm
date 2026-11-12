@@ -25,3 +25,8 @@ export class ListTransfersQueryDto extends createZodDto(
         status: z.enum(TRANSFER_STATUSES).optional(),
     }),
 ) {}
+
+/** OWN-1b: the record a manager is about to move, and to whom. */
+export class PreviewTransferQueryDto extends createZodDto(
+    z.object({ object: z.enum(RECORD_OBJECTS), recordId: z.uuid(), toMemberId: z.uuid() }),
+) {}

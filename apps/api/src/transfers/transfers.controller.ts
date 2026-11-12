@@ -1,10 +1,10 @@
 import { Body, Get, Param, ParseUUIDPipe, Post, Query } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
-import type { TransferView } from '@bylinecrm/shared';
+import type { TransferPreviewView, TransferView } from '@bylinecrm/shared';
 import { AnyMember, Requires, TenantController } from '../auth/decorators';
 import { Returns } from '../openapi/responses';
-import { DecideTransferDto, ListTransfersQueryDto, ProposeTransferDto } from './dto';
-import { transferView } from './responses';
+import { DecideTransferDto, ListTransfersQueryDto, PreviewTransferQueryDto, ProposeTransferDto } from './dto';
+import { transferPreviewView, transferView } from './responses';
 import { TransfersService } from './transfers.service';
 
 /** Ownership transfers (OWN-1, FR-CRMS-17): propose, accept, decline, cancel; a record's history; the inbox. */
@@ -21,7 +21,21 @@ export class TransfersController {
         return this.transfers.list(query);
     }
 
-    /** The owner offers the record; with `record:transfer` it moves at once (`forced`). */
+    /**
+     * OWN-1b: what a manager's move would take, and from whom — every person and open deal at the record's
+     * company, whoever holds them. Shown as a confirmation before `POST /transfers`.
+     */
+    @Requires('record:transfer')
+    @Get('preview')
+    @Returns(transferPreviewView)
+    preview(@Query() query: PreviewTransferQueryDto): Promise<TransferPreviewView> {
+        return this.transfers.preview(query);
+    }
+
+    /**
+     * The owner offers the record; with `record:transfer` it moves at once (`forced`) — a company, or a person at
+     * one, with the whole company (OWN-1b): every person at it and their open deals, whoever holds them.
+     */
     @Requires('record:write')
     @Post()
     @Returns(transferView)
