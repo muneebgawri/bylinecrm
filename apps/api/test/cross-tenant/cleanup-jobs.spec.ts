@@ -8,6 +8,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { APP_OPTIONS, configureApp } from '../../src/app';
 import { AppModule } from '../../src/app.module';
 import { assignDealOwners, TRANSFER_REASON_DEAL_OWNER_FILL } from '../../src/cli/assign-deal-owners';
+import { mergeDuplicateDeals, TRANSFER_REASON_DUPLICATE_DEAL } from '../../src/cli/merge-duplicate-deals';
 import { PAGE_TITLE_NAME, renamePageTitleCompanies } from '../../src/cli/rename-page-title-companies';
 import { PrismaService } from '../../src/infra/prisma.service';
 import { verifyAddress } from '../support/mail';
@@ -283,6 +284,118 @@ describe('clean-up jobs: page-title company names and unowned open deals', () =>
                 (await owner.person.findUniqueOrThrow({ where: { id: loose }, select: { ownerId: true } })).ownerId,
             ).toBe(anaId);
             expect((await byMail(true)).deals).toBe(0);
+        });
+    });
+    describe('merge-duplicate-deals', () => {
+        let oldest: string;
+        let twin: string;
+        let anasTwin: string;
+        let worked: string;
+        let adminsOwn: string;
+        let anasOwn: string;
+        const run = (apply: boolean) => mergeDuplicateDeals(app, workspace, { apply });
+        const row = (dealId: string) =>
+            owner.opportunity.findUniqueOrThrow({ where: { id: dealId }, select: { ownerId: true, deletedAt: true } });
+        const expected = {
+            groups: 2,
+            deals: 6,
+            removed: 3,
+            keptGivenOwner: 0,
+            leftWithContent: 0,
+            groupsOfSeveralOwners: 1,
+            failed: 0,
+        };
+
+        beforeAll(async () => {
+            const home = await company(`Dupes ${stamp}`, `dupes-${stamp}.test`);
+            await owner.company.update({ where: { id: home }, data: { ownerId: null } });
+            const person = async (local: string) =>
+                id(
+                    await as(admin)
+                        .post(w('/people'))
+                        .send({
+                            nameFirst: local,
+                            emails: { primary: `${local}-${stamp}@example.test`, additional: [] },
+                            companyId: home,
+                        })
+                        .expect(201),
+                );
+            const deal = async (name: string, pointOfContactId: string, ownerId: string | null, daysAgo: number) => {
+                const made = id(
+                    await as(admin)
+                        .post(w('/opportunities'))
+                        .send({ name, currency: 'USD', pointOfContactId, companyId: home })
+                        .expect(201),
+                );
+                await owner.opportunity.update({
+                    where: { id: made },
+                    data: { ownerId, createdAt: new Date(Date.now() - daysAgo * 86_400_000) },
+                });
+                return made;
+            };
+            // One contact, one name, four open deals: three nobody's, one Ana's and worked (a task on it).
+            const dana = await person('dupe-dana');
+            oldest = await deal('Dana Deal', dana, null, 40);
+            twin = await deal('dana deal ', dana, null, 30);
+            anasTwin = await deal('Dana Deal', dana, anaId, 20);
+            worked = await deal('Dana Deal', dana, anaId, 10);
+            await as(ana)
+                .post(w('/tasks'))
+                .send({ title: 'Call Dana', targets: [{ type: 'opportunity', id: worked }] })
+                .expect(201);
+            // Another contact: the same deal twice, the admin's and Ana's — whose it is is not the job's call.
+            const eli = await person('dupe-eli');
+            adminsOwn = await deal('Eli Deal', eli, adminId, 5);
+            anasOwn = await deal('Eli Deal', eli, anaId, 4);
+        });
+
+        it('estimates, changing nothing', async () => {
+            expect(await run(false)).toEqual(expected);
+            expect((await row(twin)).deletedAt).toBeNull();
+        });
+
+        it('keeps the deal that carries something, removes the empty duplicates, leaves a group of several owners', async () => {
+            // The one Ana worked is kept; the three empty ones go, hers included.
+            expect(await run(true)).toEqual(expected);
+            expect((await row(worked)).deletedAt).toBeNull();
+            for (const gone of [oldest, twin, anasTwin]) expect((await row(gone)).deletedAt).not.toBeNull();
+            expect((await row(adminsOwn)).deletedAt).toBeNull();
+            expect((await row(anasOwn)).deletedAt).toBeNull();
+        });
+
+        it('gives a kept deal that is nobody’s the one owner its duplicates name', async () => {
+            const home = await company(`Dupes two ${stamp}`, `dupes-two-${stamp}.test`);
+            await owner.company.update({ where: { id: home }, data: { ownerId: null } });
+            const fay = id(
+                await as(admin)
+                    .post(w('/people'))
+                    .send({
+                        nameFirst: 'Fay',
+                        emails: { primary: `dupe-fay-${stamp}@example.test`, additional: [] },
+                        companyId: home,
+                    })
+                    .expect(201),
+            );
+            const make = async (ownerId: string | null, createdAt: Date) => {
+                const made = id(
+                    await as(admin)
+                        .post(w('/opportunities'))
+                        .send({ name: 'Fay Deal', currency: 'USD', pointOfContactId: fay, companyId: home })
+                        .expect(201),
+                );
+                await owner.opportunity.update({ where: { id: made }, data: { ownerId, createdAt } });
+                return made;
+            };
+            const first = await make(null, new Date(Date.now() - 9 * 86_400_000));
+            const anas = await make(anaId, new Date(Date.now() - 3 * 86_400_000));
+            expect(await run(true)).toMatchObject({ removed: 1, keptGivenOwner: 1, failed: 0 });
+            expect(await row(first)).toMatchObject({ ownerId: anaId, deletedAt: null });
+            expect((await row(anas)).deletedAt).not.toBeNull();
+            const fill = await owner.ownershipTransfer.findFirstOrThrow({
+                where: { object: 'opportunity', recordId: first },
+            });
+            expect(fill).toMatchObject({ toMemberId: anaId, reason: TRANSFER_REASON_DUPLICATE_DEAL });
+            expect(await run(true)).toMatchObject({ removed: 0, keptGivenOwner: 0 });
         });
     });
 });
