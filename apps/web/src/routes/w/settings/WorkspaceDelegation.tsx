@@ -363,6 +363,7 @@ const ACTION_LABEL: Record<DelegationAuditEntryView['action'], string> = {
     member_included: 'Member included',
     sync_started: 'Delegated sync started',
     sync_failed: 'Delegated sync failed',
+    shared_delegated: 'Shared mailbox moved to delegation',
 };
 
 function Audit({ workspaceId }: { workspaceId: string }) {
