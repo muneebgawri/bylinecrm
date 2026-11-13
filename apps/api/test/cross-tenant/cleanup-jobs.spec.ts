@@ -343,6 +343,19 @@ describe('clean-up jobs: page-title company names and unowned open deals', () =>
                 .post(w('/tasks'))
                 .send({ title: 'Call Dana', targets: [{ type: 'opportunity', id: worked }] })
                 .expect(201);
+            // Mail the sync filed on every open deal of the contact, and a hand-over, are not a deal's own.
+            await owner.timelineActivity.createMany({
+                data: [oldest, twin].flatMap((targetId) =>
+                    ['linked-email.sent', 'linked-transfer.completed'].map((kind) => ({
+                        workspaceId: workspace,
+                        targetType: 'opportunity' as const,
+                        targetId,
+                        kind,
+                        happenedAt: new Date(),
+                        actor: { kind: 'sync', id: null },
+                    })),
+                ),
+            });
             // Another contact: the same deal twice, the admin's and Ana's — whose it is is not the job's call.
             const eli = await person('dupe-eli');
             adminsOwn = await deal('Eli Deal', eli, adminId, 5);
