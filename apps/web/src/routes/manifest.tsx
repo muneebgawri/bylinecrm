@@ -90,6 +90,9 @@ const sequences = {
 };
 
 /** The dashboard is its own chunk: the pipeline cards and the member's day (#360). */
+/** The trash is its own small chunk: a list of deleted records and Restore. */
+const trashPage = () => import('./w/trash/TrashPage').then((m) => ({ Component: m.TrashPage }));
+
 const homePage = () => import('./w/home/HomePage').then((m) => ({ Component: m.HomePage }));
 
 /** Team is its own chunk: the members' meeting KPIs and meetings from their calendars (CAL-1). */
@@ -154,6 +157,7 @@ const workspaceRoutes: RouteObject = {
         lazyPage('people/:personId', records.person, 'Person'),
         lazyPage('companies', lists.companies, 'Companies'),
         lazyPage('companies/:companyId', records.company, 'Company'),
+        lazyPage('trash', trashPage, 'Trash'),
         lazyPage('deals', dealsPage, 'Deals'),
         lazyPage('deals/:dealId', records.deal, 'Deal'),
         lazyPage('payments/:paymentId', paymentPage, 'Payment'),

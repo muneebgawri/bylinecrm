@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import type { Actor, Address, DomainEvent, Links } from '@bylinecrm/shared';
+import type { Actor, Address, DomainEvent, Links, Trashed } from '@bylinecrm/shared';
 import { Prisma } from '@prisma/client';
 import { DomainEvents } from '../events/domain-events.service';
 import { UniqueConflict } from '../infra/errors/api-errors';
@@ -19,6 +19,7 @@ import { type CountedPage, countTotal, EMPTY_COUNTED_PAGE, paginate } from './li
 import type { ListQuery } from './people.service';
 import { listScope } from '../query/query.service';
 import { countRows } from '../query/rows';
+import { RESTORED, trashedNow, withDeletions, type DeletionWhy } from './deletion';
 import { recordWhere, resolveOwner } from './record-scope';
 import { assertOwnerIsMember, compact, moneyColumns, type MoneyInput, stored } from './references';
 import { type CompanyView } from './responses';
@@ -141,12 +142,18 @@ export class CompaniesService implements BulkRecords {
     }
 
     /** Soft. People keep their `companyId`; the company is simply in the trash (PAR-079). */
-    async remove(id: string): Promise<void> {
+    async remove(id: string, why?: DeletionWhy): Promise<void> {
         const context = this.current();
         await this.rls.withWorkspace(async (tx) => {
-            const { event } = await this.removeIn(tx, context, id);
+            const { event } = await this.removeIn(tx, context, id, why);
             await this.events.record(tx, event);
         });
+    }
+
+    /** The trash, each record with when, why and by whom it was deleted. */
+    async listDeleted(query: ListQuery): Promise<CountedPage<Trashed<CompanyView>>> {
+        const page = await this.list(query, true);
+        return this.rls.withWorkspace((tx) => withDeletions(tx, 'company', page));
     }
 
     async restore(id: string): Promise<CompanyView> {
@@ -227,10 +234,15 @@ export class CompaniesService implements BulkRecords {
         }
     }
 
-    async removeIn(tx: WorkspaceClient, context: WorkspaceRunContext, id: string): Promise<{ event: DomainEvent }> {
+    async removeIn(
+        tx: WorkspaceClient,
+        context: WorkspaceRunContext,
+        id: string,
+        why?: DeletionWhy,
+    ): Promise<{ event: DomainEvent }> {
         const result = await tx.company.updateMany({
             where: { id, ...recordWhere(context, false) },
-            data: { deletedAt: new Date() },
+            data: trashedNow(context, why),
         });
         if (result.count === 0) throw notFound();
         return { event: event(context, 'company.deleted', id) };
@@ -243,7 +255,7 @@ export class CompaniesService implements BulkRecords {
     ): Promise<{ row: CompanyRow; event: DomainEvent }> {
         const result = await tx.company.updateMany({
             where: { id, ...recordWhere(context, true) },
-            data: { deletedAt: null },
+            data: RESTORED,
         });
         if (result.count === 0) throw notFound();
         return { row: await find(tx, context, id), event: event(context, 'company.restored', id) };
