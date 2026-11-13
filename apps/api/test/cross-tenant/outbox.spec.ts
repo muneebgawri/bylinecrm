@@ -5,6 +5,7 @@ import { Prisma } from '@prisma/client';
 import request, { type Response } from 'supertest';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { createApp } from '../../src/app';
+import { parseArgs, replayFailedEvents } from '../../src/cli/replay-failed-events';
 import { DomainEvents } from '../../src/events/domain-events.service';
 import { OutboxRelay } from '../../src/events/outbox-relay.service';
 import {
@@ -263,6 +264,48 @@ describe('P1-6 transactional outbox (#98)', () => {
         expect((await owner.outboxEvent.findUniqueOrThrow({ where: { id: event.id } })).attempts).toBe(
             OUTBOX_MAX_ATTEMPTS,
         );
+    });
+
+    it('#389: a failed event is replayed through the relay once put back; a dry run only counts', async () => {
+        vi.spyOn(app.get(TimelineService), 'writeFor').mockRejectedValue(new Error('timeline down for now'));
+        const person = await createPerson('Replayed');
+        const event = await eventFor(person);
+        await owner.outboxEvent.update({ where: { id: event.id }, data: { attempts: OUTBOX_MAX_ATTEMPTS - 1 } });
+        await relay.runOnce(new Date());
+        expect((await owner.outboxEvent.findUniqueOrThrow({ where: { id: event.id } })).failedAt).not.toBeNull();
+        vi.restoreAllMocks();
+
+        const options = { workspaceId: workspace, type: 'person.created', since: event.createdAt };
+        expect(await replayFailedEvents(owner, { ...options, apply: false })).toEqual({ found: 1, replayed: 0 });
+        expect((await owner.outboxEvent.findUniqueOrThrow({ where: { id: event.id } })).failedAt).not.toBeNull();
+        // Another workspace's and another type's failures are not this replay's.
+        expect(await replayFailedEvents(owner, { ...options, workspaceId: otherWorkspace, apply: true })).toEqual({
+            found: 0,
+            replayed: 0,
+        });
+        expect(await replayFailedEvents(owner, { ...options, type: 'person.updated', apply: true })).toEqual({
+            found: 0,
+            replayed: 0,
+        });
+
+        expect(await replayFailedEvents(owner, { ...options, apply: true })).toEqual({ found: 1, replayed: 1 });
+        const back = await owner.outboxEvent.findUniqueOrThrow({ where: { id: event.id } });
+        expect(back.failedAt).toBeNull();
+        expect(back.attempts).toBe(0);
+        expect(back.lastError).toBeNull();
+        await relay.runOnce(new Date());
+        const done = await owner.outboxEvent.findUniqueOrThrow({ where: { id: event.id } });
+        expect(done.completedAt).not.toBeNull();
+        expect(await entriesFor(person)).toBe(1);
+
+        expect(parseArgs(['acme', '--type', 'person.deleted', '--since', '2026-11-12T14:00:00Z', '--apply'])).toEqual({
+            slug: 'acme',
+            type: 'person.deleted',
+            since: new Date('2026-11-12T14:00:00Z'),
+            apply: true,
+        });
+        expect(() => parseArgs(['acme'])).toThrow('usage');
+        expect(() => parseArgs(['acme', '--type', 'x', '--since', 'yesterday'])).toThrow('usage');
     });
 
     it('P1-6: retention removes delivered events past their days and keeps the rest', async () => {
