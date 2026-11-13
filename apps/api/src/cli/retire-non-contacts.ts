@@ -7,7 +7,7 @@ import { DomainEvents } from '../events/domain-events.service';
 import { PrismaService } from '../infra/prisma.service';
 import { RlsPrismaService } from '../infra/rls-prisma.service';
 import type { WorkspaceRunContext } from '../infra/workspace-context';
-import { notAContactReason, staffAddresses } from '../records/not-a-contact';
+import { isStaffAddress, notAContactReason, staffOf } from '../records/not-a-contact';
 import { PeopleService } from '../records/people.service';
 
 const USAGE = 'usage: node dist/cli/retire-non-contacts.js <workspace-slug> --estimate|--apply [--chunk <n>]';
@@ -34,7 +34,7 @@ export interface RetireOptions {
 
 export interface NonContact {
     id: string;
-    /** A member's or a mailbox's address (`staff`), or an automated sender's (`system`). */
+    /** A member's, a mailbox's or an own-domain address (`staff`), or an automated sender's (`system`). */
     kind: 'staff' | 'system';
 }
 
@@ -54,7 +54,7 @@ export interface RetireReport {
  * time, judged by the one rule the API applies on create and edit.
  */
 export async function findNonContacts(rls: RlsPrismaService, workspaceId: string): Promise<NonContact[]> {
-    const staff = await rls.withWorkspace(workspaceId, (tx) => staffAddresses(tx));
+    const staff = await rls.withWorkspace(workspaceId, (tx) => staffOf(tx));
     const found: NonContact[] = [];
     let after: string | undefined;
     for (;;) {
@@ -69,7 +69,7 @@ export async function findNonContacts(rls: RlsPrismaService, workspaceId: string
         );
         for (const p of page) {
             if (!p.emailPrimary || notAContactReason(p.emailPrimary, staff) === null) continue;
-            found.push({ id: p.id, kind: staff.has(p.emailPrimary.trim().toLowerCase()) ? 'staff' : 'system' });
+            found.push({ id: p.id, kind: isStaffAddress(p.emailPrimary, staff) ? 'staff' : 'system' });
         }
         if (page.length < PAGE) return found;
         after = page[page.length - 1]!.id;
