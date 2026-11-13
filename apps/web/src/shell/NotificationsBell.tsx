@@ -12,7 +12,7 @@ const NotificationsPanel = lazy(() => import('./NotificationsPanel').then((m) =>
  * every minute. The first press loads the panel (`NotificationsPanel`), which then owns opening and
  * closing.
  *
- * It tells without interrupting: while anything is unread the bell wears the accent colour, and when the count
+ * It tells without interrupting: while anything is unread the bell turns blue, and when the count
  * rises while the app is open it swings once and (unless the member turned the sound off) chimes. What was
  * already unread when the app opened makes no sound.
  */
@@ -41,7 +41,7 @@ export function NotificationsBell({ workspaceId }: { workspaceId: string }) {
             size="icon"
             shape="square"
             aria-label={unread > 0 ? `Notifications, ${unread} unread` : 'Notifications'}
-            className={cn('relative', unread > 0 && 'bg-accent-soft text-accent hover:text-accent')}
+            className={cn('relative', unread > 0 && 'bg-info-soft text-info hover:bg-info-soft hover:text-info')}
             onClick={first}
         >
             <Bell key={rings} aria-hidden className={rings > 0 ? 'bell-ring' : undefined} />

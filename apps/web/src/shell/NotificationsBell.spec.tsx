@@ -281,7 +281,7 @@ describe('#192 the bell: a member’s task notifications', () => {
         const client = createQueryClient();
         renderAt([route('/w/:workspaceId/home', <NotificationsBell workspaceId={WS} />)], `/w/${WS}/home`, [], client);
         const button = await screen.findByRole('button', { name: 'Notifications, 1 unread' });
-        expect(button).toHaveClass('text-accent');
+        expect(button).toHaveClass('text-info');
         expect(chime).not.toHaveBeenCalled();
         unread = 2;
         await client.invalidateQueries();
