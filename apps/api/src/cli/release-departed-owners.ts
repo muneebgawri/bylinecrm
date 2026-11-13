@@ -1,6 +1,7 @@
 import 'reflect-metadata';
 import type { INestApplicationContext } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
+import { Prisma } from '@prisma/client';
 import { AppModule } from '../app.module';
 import { DomainEvents } from '../events/domain-events.service';
 import { PrismaService } from '../infra/prisma.service';
@@ -11,7 +12,8 @@ import { PeopleService } from '../records/people.service';
 import { TransfersService } from '../transfers/transfers.service';
 import { importJobContext, JOB_WRITE_CHUNK, quietWorkers } from './job-common';
 
-const USAGE = 'usage: node dist/cli/release-departed-owners.js <workspace-slug> --estimate|--apply [--batch <n>]';
+const USAGE =
+    'usage: node dist/cli/release-departed-owners.js <workspace-slug> --estimate|--apply [--batch <n>] [--deals-of <email>]';
 
 /** Records read per statement (`--batch`): a page, never the whole table. */
 export const DEFAULT_BATCH = 500;
@@ -22,7 +24,18 @@ export const TRANSFER_REASON_DEPARTED_TO_COMPANY_OWNER = 'Departed owner: the co
 /** The reason on the move of a departed member's deal to the owner of its contact (the company is nobody's). */
 export const TRANSFER_REASON_DEPARTED_TO_CONTACT_OWNER = 'Departed owner: the contact’s owner';
 
+/** The reason on the move of a named active member's deal (`--deals-of`) to the owner of its company. */
+export const TRANSFER_REASON_HANDED_ON_TO_COMPANY_OWNER = 'Handed on: the company’s owner';
+
+/** The reason on the move of a named active member's deal (`--deals-of`) to the owner of its contact. */
+export const TRANSFER_REASON_HANDED_ON_TO_CONTACT_OWNER = 'Handed on: the contact’s owner';
+
 export interface ReleaseOptions {
+    /**
+     * An active member whose open deals are handed on by the same rule, in place of the members who have left: their
+     * people are not touched, and a deal the rule would give back to them stays theirs (`dealsKept`).
+     */
+    dealsOf?: string | undefined;
     /** Write: without it, nothing changes and the counts say what `--apply` would do. */
     apply: boolean;
     /** Records read per statement; `DEFAULT_BATCH` when absent. */
@@ -45,6 +58,8 @@ export interface ReleaseReport {
     dealsToContactOwner: number;
     /** Left with no owner: nobody active owns the company or the contact. */
     dealsReleased: number;
+    /** `dealsOf` only: deals the rule gives back to that member (they own its company, or its contact), kept as they are. */
+    dealsKept: number;
     /** Records left as they were: their write was refused (the reason is on stderr, no record named). */
     failed: number;
 }
@@ -61,6 +76,9 @@ const FIRST_ID = '00000000-0000-0000-0000-000000000000';
  * on the record's history, as `assign-deal-owners` writes one; a release is the record service's write alone. Writes
  * act as an import (`importJobContext`), so OWN-2f does not read them as anyone's work. Closed deals keep their
  * owner: they are history. Re-running changes nothing once done. Counts only: no record is named.
+ *
+ * `dealsOf` names an active member instead (a shared account that collected deals on import): only the deals step
+ * runs, for that member's open deals, by the same rule; a deal the rule gives back to them is kept.
  */
 export async function releaseDepartedOwners(
     app: INestApplicationContext,
@@ -87,8 +105,21 @@ export async function releaseDepartedOwners(
         dealsToCompanyOwner: 0,
         dealsToContactOwner: 0,
         dealsReleased: 0,
+        dealsKept: 0,
         failed: 0,
     };
+    const dealsOf = options.dealsOf;
+    if (dealsOf) {
+        const member = await owner.workspaceMember.findFirst({
+            where: { id: dealsOf, workspaceId, leftAt: null },
+            select: { id: true },
+        });
+        if (!member) throw new Error('dealsOf must be an active member of the workspace');
+    }
+    const fromMembers = dealsOf ? Prisma.sql`gone.id = ${dealsOf}::uuid` : Prisma.sql`gone.left_at IS NOT NULL`;
+    const reasons = dealsOf
+        ? { company: TRANSFER_REASON_HANDED_ON_TO_COMPANY_OWNER, contact: TRANSFER_REASON_HANDED_ON_TO_CONTACT_OWNER }
+        : { company: TRANSFER_REASON_DEPARTED_TO_COMPANY_OWNER, contact: TRANSFER_REASON_DEPARTED_TO_CONTACT_OWNER };
     const refused = (count: number, error: unknown) => {
         report.failed += count;
         progress(`refused: ${error instanceof Error ? error.message : String(error)}`);
@@ -96,7 +127,7 @@ export async function releaseDepartedOwners(
 
     // 1. People: to their company's active owner (with the departed member's open deals with them), else nobody.
     let after = FIRST_ID;
-    for (;;) {
+    while (!dealsOf) {
         const page = await owner.$queryRaw<{ id: string; from: string; to: string | null; deals: number }[]>`
             SELECT p.id::text AS id, p.owner_id::text AS "from", cm.id::text AS "to",
                    (SELECT count(*) FROM opportunities d
@@ -177,7 +208,7 @@ export async function releaseDepartedOwners(
             SELECT d.id::text AS id, d.owner_id::text AS "from",
                    cm.id::text AS company_owner, pm.id::text AS contact_owner
             FROM opportunities d
-            JOIN workspace_members gone ON gone.id = d.owner_id AND gone.left_at IS NOT NULL
+            JOIN workspace_members gone ON gone.id = d.owner_id AND ${fromMembers}
             LEFT JOIN companies c ON c.id = d.company_id AND c.deleted_at IS NULL
             LEFT JOIN workspace_members cm ON cm.id = c.owner_id AND cm.left_at IS NULL
             LEFT JOIN people p ON p.id = d.point_of_contact_id AND p.deleted_at IS NULL
@@ -189,15 +220,25 @@ export async function releaseDepartedOwners(
         report.deals += page.length;
         for (let at = 0; at < page.length; at += JOB_WRITE_CHUNK) {
             const chunk = page.slice(at, at + JOB_WRITE_CHUNK);
-            const plan = chunk.map((d) => ({
-                ...d,
-                to: d.company_owner ?? d.contact_owner,
-                why: d.company_owner
-                    ? ('dealsToCompanyOwner' as const)
-                    : d.contact_owner
-                      ? ('dealsToContactOwner' as const)
-                      : ('dealsReleased' as const),
-            }));
+            const plan = chunk.flatMap((d) => {
+                const to = d.company_owner ?? d.contact_owner;
+                if (to === d.from) {
+                    // The rule gives it back to the member it is handed on from: it stays as it is.
+                    report.dealsKept += 1;
+                    return [];
+                }
+                return [
+                    {
+                        ...d,
+                        to,
+                        why: d.company_owner
+                            ? ('dealsToCompanyOwner' as const)
+                            : d.contact_owner
+                              ? ('dealsToContactOwner' as const)
+                              : ('dealsReleased' as const),
+                    },
+                ];
+            });
             if (!options.apply) {
                 for (const d of plan) report[d.why] += 1;
                 continue;
@@ -220,10 +261,7 @@ export async function releaseDepartedOwners(
                                     from: d.from,
                                     to: d.to,
                                     target: { type: 'opportunity', id: d.id },
-                                    reason:
-                                        d.why === 'dealsToCompanyOwner'
-                                            ? TRANSFER_REASON_DEPARTED_TO_COMPANY_OWNER
-                                            : TRANSFER_REASON_DEPARTED_TO_CONTACT_OWNER,
+                                    reason: d.why === 'dealsToCompanyOwner' ? reasons.company : reasons.contact,
                                     silent: true,
                                 });
                             }
@@ -238,7 +276,7 @@ export async function releaseDepartedOwners(
             }
         }
         after = page[page.length - 1]!.id;
-        progress(`… ${report.deals} open deals of members who left`);
+        progress(`… ${report.deals} open deals ${dealsOf ? 'of the member' : 'of members who left'}`);
     }
     return report;
 }
@@ -260,6 +298,13 @@ async function main(): Promise<void> {
         if (!Number.isInteger(batch) || batch < 1) throw new Error(USAGE);
         flags.splice(at, 2);
     }
+    let dealsOfEmail: string | undefined;
+    const of = flags.indexOf('--deals-of');
+    if (of >= 0) {
+        dealsOfEmail = flags[of + 1];
+        if (!dealsOfEmail || dealsOfEmail.startsWith('--')) throw new Error(USAGE);
+        flags.splice(of, 2);
+    }
     const known = new Set(['--estimate', '--apply']);
     const apply = flags.includes('--apply');
     if (!slug || slug.startsWith('--') || flags.some((f) => !known.has(f)) || apply === flags.includes('--estimate')) {
@@ -270,12 +315,32 @@ async function main(): Promise<void> {
     try {
         const workspace = await app.get(PrismaService).workspace.findUnique({ where: { slug }, select: { id: true } });
         if (!workspace) throw new Error(`no workspace ${slug}`);
+        let dealsOf: string | undefined;
+        if (dealsOfEmail) {
+            const member = await app.get(PrismaService).workspaceMember.findFirst({
+                where: { workspaceId: workspace.id, leftAt: null, user: { email: dealsOfEmail.toLowerCase() } },
+                select: { id: true },
+            });
+            if (!member) throw new Error('--deals-of: no active member of the workspace has that address');
+            dealsOf = member.id;
+        }
         const r = await releaseDepartedOwners(app, workspace.id, {
             apply,
             batch,
+            dealsOf,
             onProgress: (line) => console.error(line),
         });
         const would = apply ? '' : 'would be ';
+        if (dealsOf) {
+            console.log(`${r.deals} open deals of the member`);
+            console.log(
+                `  ${would}given to the company’s owner: ${r.dealsToCompanyOwner}; the contact’s owner: ${r.dealsToContactOwner}; no owner: ${r.dealsReleased}`,
+            );
+            console.log(`  kept (the rule gives them back to the member): ${r.dealsKept}`);
+            if (apply) console.log(`refused and left as they were: ${r.failed}`);
+            else console.log('estimate: nothing changed; add --apply to do it');
+            return;
+        }
         console.log(`${r.people} people owned by members who left`);
         console.log(
             `  ${would}moved to their company’s owner: ${r.peopleToCompanyOwner} (with ${r.dealsWithPeople} open deals)`,
