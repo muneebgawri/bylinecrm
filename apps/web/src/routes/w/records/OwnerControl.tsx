@@ -17,11 +17,20 @@ import {
     toast,
 } from '@bylinecrm/ui';
 import { useState, type FormEvent } from 'react';
+import { useNavigate } from 'react-router';
 import { ApiError } from '../../../api/client';
+import { useOwnershipSettings } from '../../../api/ownership';
 import { currentMembers, useMembersSummary } from '../../../api/records';
-import { transfers, useDecideTransfer, useProposeTransfer, useRecordTransfers } from '../../../api/transfers';
+import {
+    transfers,
+    useDecideTransfer,
+    useProposeTransfer,
+    useRecordTransfers,
+    useReleaseRecord,
+} from '../../../api/transfers';
 import type { TransferPreviewView, TransferView } from '../../../api/types';
 import { useCan, useMembership, usePermission } from '../../../auth/capabilities';
+import { paths } from '../../paths';
 import { InlineSelect } from './InlineEdit';
 
 /**
@@ -31,7 +40,9 @@ import { InlineSelect } from './InlineEdit';
  * - **A manager** (`record:transfer`) picks the new owner and the record moves at once. A company, or a person
  *   at one, takes the whole company — every person at it and their open deals, whoever holds them (OWN-1b) — so
  *   when the move takes more than the record, it is confirmed first, by who loses what. Everyone is told.
- * - **The owner** hands it on: "Hand on…" offers it to a member, who accepts or declines.
+ * - **The owner** hands it on: "Hand on…" offers it to a member, who accepts or declines. Or gives it up:
+ *   "Release…" sends it at once to the house account (Settings → Ownership), for a manager to hand out again —
+ *   the way to let go of a lead without deleting it. Shown only while a house account is set.
  * - **Anyone with `record:write`** may claim, or assign, a record nobody owns.
  * - **Everyone else** sees who owns it, and why they cannot change it.
  *
@@ -61,7 +72,11 @@ export function OwnerControl({
     const members = useMembersSummary(workspaceId);
     const history = useRecordTransfers(workspaceId, object, recordId);
     const propose = useProposeTransfer(workspaceId);
+    const release = useReleaseRecord(workspaceId);
+    const settings = useOwnershipSettings(workspaceId);
+    const navigate = useNavigate();
     const [handing, setHanding] = useState(false);
+    const [releasing, setReleasing] = useState(false);
     /** OWN-1b: a manager's move that takes more than the record, waiting on the manager's confirmation. */
     const [confirming, setConfirming] = useState<{
         toMemberId: string;
@@ -74,6 +89,9 @@ export function OwnerControl({
     const open = history.data?.find((t) => t.status === 'proposed') ?? null;
     const isOwner = value !== null && value === me;
     const ownScoped = membership?.recordScope === 'own';
+    const houseId = settings.data?.releaseToMemberId ?? null;
+    const houseName = options.find((o) => o.value === houseId)?.label ?? 'the house account';
+    const canRelease = houseId !== null && houseId !== me;
 
     const save = async (next: string | null) => {
         // Clearing the owner, or a member claiming a record nobody owns, is a plain write. A manager's assignment
@@ -99,7 +117,9 @@ export function OwnerControl({
     const reason = !write.allowed
         ? write.reason
         : isOwner
-          ? 'Use “Hand on…” to offer it to someone; they accept or decline.'
+          ? canRelease
+              ? 'Use “Hand on…” to offer it to someone, or “Release…” to give it up.'
+              : 'Use “Hand on…” to offer it to someone; they accept or decline.'
           : 'Owned by someone else. Ask them, or a manager, to hand it on.';
 
     return (
@@ -116,15 +136,16 @@ export function OwnerControl({
                 onSave={save}
             />
             {isOwner && !canForce && !open && write.allowed && (
-                <Button
-                    size="sm"
-                    variant="ghost"
-                    shape="square"
-                    className="justify-self-start"
-                    onClick={() => setHanding(true)}
-                >
-                    Hand on…
-                </Button>
+                <div className="flex flex-wrap gap-1.5">
+                    <Button size="sm" variant="ghost" shape="square" onClick={() => setHanding(true)}>
+                        Hand on…
+                    </Button>
+                    {canRelease && (
+                        <Button size="sm" variant="ghost" shape="square" onClick={() => setReleasing(true)}>
+                            Release…
+                        </Button>
+                    )}
+                </div>
             )}
             {open && <OpenOffer workspaceId={workspaceId} offer={open} me={me} canForce={canForce} />}
             {confirming && (
@@ -134,6 +155,19 @@ export function OwnerControl({
                     onAnswer={(go) => confirming.resolve(go)}
                 />
             )}
+            <ReleaseDialog
+                open={releasing}
+                onClose={() => setReleasing(false)}
+                toName={houseName}
+                pending={release.isPending}
+                onSubmit={async (why) => {
+                    const done = await release.mutateAsync({ object, recordId, ...(why ? { note: why } : {}) });
+                    toast({ tone: 'success', title: `Released to ${done.to.name ?? houseName}.` });
+                    setReleasing(false);
+                    // It is no longer theirs: a member who keeps to their own records cannot stay on its page.
+                    if (ownScoped) void navigate(LIST_PATH[object](workspaceId));
+                }}
+            />
             <HandOnDialog
                 open={handing}
                 onClose={() => setHanding(false)}
@@ -156,6 +190,13 @@ export function OwnerControl({
         </div>
     );
 }
+
+/** Where a member lands after releasing a record they can no longer open. */
+const LIST_PATH: Record<RecordObject, (workspaceId: string) => string> = {
+    person: paths.people,
+    company: paths.companies,
+    opportunity: paths.deals,
+};
 
 /** One member's losses, as the confirmation reads them: "Arvore Partners, 3 contacts and 1 open deal". */
 function lossText(l: TransferPreviewView['losers'][number]): string {
@@ -283,6 +324,66 @@ function OpenOffer({
                 )}
             </div>
         </div>
+    );
+}
+
+/** The owner's confirmation before giving a record up: where it goes, what goes with it, and (optionally) why. */
+function ReleaseDialog({
+    open,
+    onClose,
+    toName,
+    pending,
+    onSubmit,
+}: {
+    open: boolean;
+    onClose: () => void;
+    toName: string;
+    pending: boolean;
+    onSubmit: (reason: string) => Promise<void>;
+}) {
+    const [reason, setReason] = useState('');
+    const [error, setError] = useState<string | null>(null);
+    const close = () => {
+        setReason('');
+        setError(null);
+        onClose();
+    };
+    const submit = async (e: FormEvent) => {
+        e.preventDefault();
+        try {
+            await onSubmit(reason.trim());
+            setReason('');
+            setError(null);
+        } catch (err) {
+            setError(err instanceof ApiError ? err.message : 'Could not release it.');
+        }
+    };
+    return (
+        <Dialog open={open} onOpenChange={(o) => !o && close()}>
+            <DialogContent>
+                <DialogTitle>Release this record</DialogTitle>
+                <DialogDescription>
+                    It goes to {toName} now, with its history, for a manager to give to someone else. It stops being
+                    yours. If the record is a company, or a person at a company you own, its people and open deals go
+                    with it.
+                </DialogDescription>
+                <form onSubmit={submit}>
+                    <DialogBody className="grid gap-4">
+                        <Field label="Why (optional)" error={error}>
+                            <Textarea value={reason} maxLength={500} onChange={(e) => setReason(e.target.value)} />
+                        </Field>
+                    </DialogBody>
+                    <DialogFooter>
+                        <Button type="button" onClick={close}>
+                            Cancel
+                        </Button>
+                        <Button type="submit" variant="primary" loading={pending}>
+                            Release
+                        </Button>
+                    </DialogFooter>
+                </form>
+            </DialogContent>
+        </Dialog>
     );
 }
 

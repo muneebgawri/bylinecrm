@@ -172,7 +172,15 @@ export interface OwnershipSettingsView {
      * person there takes it over. 0 turns it off.
      */
     dormantOwnerMonths: number;
+    /**
+     * The member a record goes to when its owner releases it — the house account, where a manager hands it out
+     * again. Null: releasing is off, and an owner can only hand a record on to a member who accepts.
+     */
+    releaseToMemberId: string | null;
 }
+
+/** The reason on the transfer that an owner's release of a record writes. */
+export const TRANSFER_REASON_RELEASED = 'Released by its owner';
 
 /** What a `409 conflict.transfer_cooling` says in `details`. */
 export interface TransferCoolingDetails {

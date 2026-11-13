@@ -3,6 +3,7 @@ import { ThemeProvider, TooltipProvider } from '@bylinecrm/ui';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { MemoryRouter, Route, Routes } from 'react-router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createQueryClient } from '../../../api/queries';
 import type { MembershipSummary } from '../../../api/types';
@@ -13,6 +14,7 @@ const WS = '11111111-2222-4333-8444-555555555555';
 const MEMBERS = [
     { memberId: 'kate', name: 'Kate Uzzi', leftAt: null },
     { memberId: 'evan', name: 'Evan James', leftAt: null },
+    { memberId: 'house', name: 'House Account', leftAt: null },
 ];
 const PREVIEW = {
     total: 4,
@@ -48,6 +50,17 @@ function stubApi(preview: unknown = PREVIEW) {
             calls.push({ method, path });
             if (path.endsWith('/members/summary')) return json(MEMBERS);
             if (path.endsWith('/transfers/preview')) return json(preview);
+            if (path.endsWith('/ownership/settings')) {
+                return json({ transferCoolingDays: 14, dormantOwnerMonths: 6, releaseToMemberId: 'house' });
+            }
+            if (method === 'POST' && path.endsWith('/transfers/release')) {
+                return json({
+                    id: 't2',
+                    to: { memberId: 'house', name: 'House Account' },
+                    moved: [{}],
+                    status: 'forced',
+                });
+            }
             if (method === 'POST' && path.endsWith('/transfers')) {
                 return json({
                     id: 't1',
@@ -74,13 +87,38 @@ const manager: MembershipSummary = {
     capabilities: ['record:read', 'record:write', 'record:transfer'] satisfies Capability[],
 };
 
-function renderOwner(onSave = vi.fn(async () => undefined)) {
+/** A rep who keeps to their own records, and owns the one on screen. */
+const rep: MembershipSummary = {
+    ...manager,
+    memberId: 'kate',
+    roleName: 'Account manager',
+    recordScope: 'own',
+    capabilities: ['record:read', 'record:write'] satisfies Capability[],
+};
+
+function renderOwner(onSave = vi.fn(async () => undefined), membership: MembershipSummary = manager) {
     render(
         <ThemeProvider>
             <TooltipProvider>
                 <QueryClientProvider client={createQueryClient()}>
-                    <CapabilitiesProvider membership={manager}>
-                        <OwnerControl workspaceId={WS} object="person" recordId="p1" value="kate" onSave={onSave} />
+                    <CapabilitiesProvider membership={membership}>
+                        <MemoryRouter initialEntries={['/record']}>
+                            <Routes>
+                                <Route
+                                    path="/record"
+                                    element={
+                                        <OwnerControl
+                                            workspaceId={WS}
+                                            object="person"
+                                            recordId="p1"
+                                            value="kate"
+                                            onSave={onSave}
+                                        />
+                                    }
+                                />
+                                <Route path="/w/:workspaceId/people" element={<p>people list</p>} />
+                            </Routes>
+                        </MemoryRouter>
                     </CapabilitiesProvider>
                 </QueryClientProvider>
             </TooltipProvider>
@@ -130,5 +168,25 @@ describe('OwnerControl — a manager’s move (OWN-1b)', () => {
             expect(calls.filter((c) => c.method === 'POST' && c.path.endsWith('/transfers'))).toHaveLength(1),
         );
         expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    });
+
+    it('an owner releases the record to the house account, and leaves a page that is no longer theirs', async () => {
+        const calls = stubApi();
+        renderOwner(undefined, rep);
+        await userEvent.click(await screen.findByRole('button', { name: 'Release…' }));
+        const dialog = await screen.findByRole('dialog', { name: 'Release this record' });
+        expect(within(dialog).getByText(/It goes to House Account now/)).toBeInTheDocument();
+        await userEvent.click(within(dialog).getByRole('button', { name: 'Release' }));
+        await waitFor(() =>
+            expect(calls.filter((c) => c.method === 'POST' && c.path.endsWith('/transfers/release'))).toHaveLength(1),
+        );
+        expect(await screen.findByText('people list')).toBeInTheDocument();
+    });
+
+    it('offers no release to a manager, who moves a record by choosing its owner', async () => {
+        stubApi();
+        renderOwner();
+        await screen.findByRole('combobox', { name: 'Owner' });
+        expect(screen.queryByRole('button', { name: 'Release…' })).not.toBeInTheDocument();
     });
 });

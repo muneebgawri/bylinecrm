@@ -1,5 +1,17 @@
 import { DORMANT_OWNER_MONTHS_LIMITS, TRANSFER_COOLING_DAYS_LIMITS } from '@bylinecrm/shared';
-import { Button, DataTableChrome, EmptyState, Field, Input, toast } from '@bylinecrm/ui';
+import {
+    Button,
+    DataTableChrome,
+    EmptyState,
+    Field,
+    Input,
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+    toast,
+} from '@bylinecrm/ui';
 import { useState, type FormEvent } from 'react';
 import { Link } from 'react-router';
 import { ApiError, fieldErrorAt } from '../../../api/client';
@@ -9,6 +21,7 @@ import {
     usePutOwnershipSettings,
     useResolveConflicts,
 } from '../../../api/ownership';
+import { currentMembers, useMembersSummary } from '../../../api/records';
 import type { OwnershipConflictView, OwnershipSettingsView } from '../../../api/types';
 import { usePermission } from '../../../auth/capabilities';
 import { failureText } from '../../../lib/errors';
@@ -140,14 +153,15 @@ export function Ownership() {
 /**
  * Settings → Ownership: the transfer cooling period (owner decision 2) — days a record cannot go back to the member
  * it left — and when a company's owner lets it go (OWN-2f) — months an owner may leave a company untouched and keep
- * it. Managers and admins edit; the server is the gate and the range.
+ * it — and the house account an owner's released record goes to. Managers and admins edit; the server is the gate
+ * and the range.
  */
 function CoolingSettings() {
     const workspaceId = useWorkspaceId();
     const settings = useOwnershipSettings(workspaceId);
     return settings.data ? (
         <CoolingForm
-            key={`${settings.data.transferCoolingDays}-${settings.data.dormantOwnerMonths}`}
+            key={`${settings.data.transferCoolingDays}-${settings.data.dormantOwnerMonths}-${settings.data.releaseToMemberId ?? ''}`}
             settings={settings.data}
         />
     ) : null;
@@ -159,15 +173,22 @@ function wholeNumber(value: string): number | null {
     return value.trim() !== '' && Number.isInteger(n) ? n : null;
 }
 
+/** The select's value for no house account (a select item cannot be empty). */
+const NOBODY = 'nobody';
+
 function CoolingForm({ settings }: { settings: OwnershipSettingsView }) {
     const workspaceId = useWorkspaceId();
     const put = usePutOwnershipSettings(workspaceId);
     const edit = usePermission('record:transfer');
     const [days, setDays] = useState(String(settings.transferCoolingDays));
     const [months, setMonths] = useState(String(settings.dormantOwnerMonths));
+    const [house, setHouse] = useState<string | null>(settings.releaseToMemberId);
+    const members = useMembersSummary(workspaceId);
     const [local, setLocal] = useState<{ days?: string | undefined; months?: string | undefined }>({});
     const dirty =
-        wholeNumber(days) !== settings.transferCoolingDays || wholeNumber(months) !== settings.dormantOwnerMonths;
+        wholeNumber(days) !== settings.transferCoolingDays ||
+        wholeNumber(months) !== settings.dormantOwnerMonths ||
+        house !== settings.releaseToMemberId;
 
     const submit = (event: FormEvent) => {
         event.preventDefault();
@@ -181,7 +202,7 @@ function CoolingForm({ settings }: { settings: OwnershipSettingsView }) {
             return;
         }
         put.mutate(
-            { transferCoolingDays: d, dormantOwnerMonths: m },
+            { transferCoolingDays: d, dormantOwnerMonths: m, releaseToMemberId: house },
             {
                 onSuccess: () => toast({ title: 'Ownership settings saved' }),
                 onError: (e) => {
@@ -247,6 +268,31 @@ function CoolingForm({ settings }: { settings: OwnershipSettingsView }) {
                         }}
                         className="max-w-[10rem]"
                     />
+                </Field>
+            </SettingsSection>
+            <SettingsSection
+                title="Released records"
+                description="Where a record goes when its owner gives it up instead of deleting it."
+                disabled={!edit.allowed}
+            >
+                <Field
+                    label="House account"
+                    hint="An owner can release a lead, company or deal they no longer work. It moves to this member at once, with its history, for a manager to give to someone else. With nobody chosen, owners can only hand a record on to a member who accepts."
+                    error={fieldErrorAt(put.error, 'releaseToMemberId')}
+                >
+                    <Select value={house ?? NOBODY} onValueChange={(v) => setHouse(v === NOBODY ? null : v)}>
+                        <SelectTrigger aria-label="House account" className="max-w-[20rem]">
+                            <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value={NOBODY}>Nobody (releasing is off)</SelectItem>
+                            {currentMembers(members.data).map((m) => (
+                                <SelectItem key={m.memberId} value={m.memberId}>
+                                    {m.name ?? 'Unnamed member'}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
                 </Field>
             </SettingsSection>
             {edit.allowed && <SettingsSaveBar dirty={dirty} saving={put.isPending} saveLabel="Save" />}

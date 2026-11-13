@@ -46,8 +46,22 @@ const ownershipSettingsShape = z.object({
                 'OWN-2f: months after which a company owner who has not worked it (no open deal, no mail, nothing saved or done there, no hand-over to them) holds it for nobody: its leads are anyone’s, and the next member to save a person there takes it over. 0 turns it off.',
         }),
 });
-class OwnershipSettingsDto extends createZodDto(ownershipSettingsShape) {}
-const ownershipSettingsView = named('OwnershipSettings', ownershipSettingsShape);
+const RELEASE_TO =
+    'The member a record goes to when its owner releases it (the house account). Null turns releasing off.';
+/** `PUT`: the two periods, whole; `releaseToMemberId` changes only when named. */
+class OwnershipSettingsDto extends createZodDto(
+    ownershipSettingsShape.extend({
+        releaseToMemberId: z
+            .uuid()
+            .nullable()
+            .optional()
+            .meta({ description: `${RELEASE_TO} Left out: unchanged.` }),
+    }),
+) {}
+const ownershipSettingsView = named(
+    'OwnershipSettings',
+    ownershipSettingsShape.extend({ releaseToMemberId: z.uuid().nullable().meta({ description: RELEASE_TO }) }),
+);
 
 const resolvedView = named(
     'OwnershipResolution',
@@ -98,7 +112,7 @@ export class OwnershipController {
         private readonly transfers: TransfersService,
     ) {}
 
-    /** The transfer cooling period (owner decision 2); every member may read it. */
+    /** The transfer cooling period (owner decision 2) and where a released record goes; every member may read them. */
     @Requires('record:read')
     @Get('settings')
     @Returns(ownershipSettingsView)
