@@ -289,7 +289,7 @@ describe('PNW-765 ownership push to NewswireOS', () => {
     });
 
     it('a 404 (the route not deployed yet) is "not ready" and never retried', async () => {
-        await move(person, benId);
+        await move(person, (await latest()).newOwnerEmail === emails.ben ? adminId : benId);
         newswireos.next(new NewswireosApiError(404, 'Not Found'));
         const d = await latest();
         expect(await run(d.id)).toBe('done');
