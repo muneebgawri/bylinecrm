@@ -1,4 +1,4 @@
-import { Button, EmptyState, PageHeader, Tabs, TabsList, TabsTrigger, toast } from '@bylinecrm/ui';
+import { Button, EmptyState, PageHeader, Tabs, TabsContent, TabsList, TabsTrigger, toast } from '@bylinecrm/ui';
 import { RotateCcw } from 'lucide-react';
 import { useState } from 'react';
 import { ApiError } from '../../../api/client';
@@ -52,8 +52,12 @@ export function TrashPage() {
                                 </TabsTrigger>
                             ))}
                         </TabsList>
+                        {TABS.map((t) => (
+                            <TabsContent key={t.object} value={t.object} className="mt-4">
+                                <TrashList workspaceId={workspaceId} object={t.object} />
+                            </TabsContent>
+                        ))}
                     </Tabs>
-                    <TrashList key={object} workspaceId={workspaceId} object={object} />
                 </>
             ) : (
                 <EmptyState title="You cannot open the trash" body={write.reason} />

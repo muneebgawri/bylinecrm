@@ -45,8 +45,7 @@ const GETS: [RegExp, Handler][] = [
     [new RegExp(`^${W}/roles$`), () => data.roles],
     [new RegExp(`^${W}/api-keys$`), () => data.apiKeys],
     [new RegExp(`^${W}/invites$`), () => data.invites],
-    [new RegExp(`^${W}/people/${ID}$`), (m) => byId(data.people, m[1])],
-    [new RegExp(`^${W}/people$`), () => data.recordPage(data.people)],
+    // Before the by-id routes: `deleted` is not an id.
     [
         new RegExp(`^${W}/people/deleted$`),
         () =>
@@ -63,6 +62,8 @@ const GETS: [RegExp, Handler][] = [
             ),
     ],
     [new RegExp(`^${W}/companies/deleted$`), () => data.recordPage([])],
+    [new RegExp(`^${W}/people/${ID}$`), (m) => byId(data.people, m[1])],
+    [new RegExp(`^${W}/people$`), () => data.recordPage(data.people)],
     [new RegExp(`^${W}/companies/${ID}$`), (m) => byId(data.companies, m[1])],
     [new RegExp(`^${W}/companies$`), () => data.recordPage(data.companies)],
     [new RegExp(`^${W}/opportunities/${ID}/history$`), () => data.history],
