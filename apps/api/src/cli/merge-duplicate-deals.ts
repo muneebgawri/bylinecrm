@@ -16,6 +16,19 @@ const USAGE = 'usage: node dist/cli/merge-duplicate-deals.js <workspace-slug> --
 /** The reason on the hand-over that gave the deal kept the owner its duplicates named. */
 export const TRANSFER_REASON_DUPLICATE_DEAL = 'Duplicate deals merged: the owner of the duplicates';
 
+/**
+ * The timeline entries that are a deal's own: a note, a task or a call someone put on it, and what NewswireOS
+ * reported for it. Mail and meetings are not: the sync files each on every open deal of the contact
+ * (`mail-sync/matching.ts`), so every duplicate shows the same ones and the deal kept keeps them. Nor is an
+ * ownership hand-over, which is bookkeeping.
+ */
+export const OWN_ACTIVITY_KIND_PATTERNS: readonly string[] = [
+    'linked-note.%',
+    'linked-task.%',
+    'linked-call.%',
+    'external.newswireos_%',
+];
+
 export interface MergeDealsOptions {
     /** Write: without it, nothing changes and the counts say what `--apply` would do. */
     apply: boolean;
@@ -50,7 +63,8 @@ interface Deal {
 /**
  * The import brought the same deal in more than once: one contact, one deal name, several open deals (a row per
  * campaign in the old system). For each such contact and name, one deal is kept — the one that carries something
- * (an amount, activity, a task, an invoice, a payment, mail, a sequence), else the furthest along, else the oldest
+ * (an amount, a note, task or call of its own, an invoice, a payment, mail written from it, a sequence), else the
+ * furthest along, else the oldest
  * — and the others are removed when they carry nothing: softly, as from the deal's page, so each can be restored.
  * A duplicate that carries something stays. When the deal kept is nobody's and the group names exactly one active
  * owner, the deal kept is given to them (a silent hand-over on its ownership history). A group whose deals are
@@ -97,7 +111,7 @@ export async function mergeDuplicateDeals(
                (COALESCE(d.amount_minor, 0) > 0
                 OR EXISTS (SELECT 1 FROM timeline_activities t
                            WHERE t.workspace_id = d.workspace_id AND t.target_id = d.id AND t.target_type = 'opportunity'
-                             AND (t.kind LIKE 'linked-%' OR t.kind LIKE 'external.%'))
+                             AND t.kind LIKE ANY (${OWN_ACTIVITY_KIND_PATTERNS}::text[]))
                 OR EXISTS (SELECT 1 FROM task_targets tt WHERE tt.target_type = 'opportunity' AND tt.target_id = d.id)
                 OR EXISTS (SELECT 1 FROM deal_invoices i WHERE i.opportunity_id = d.id)
                 OR EXISTS (SELECT 1 FROM newswireos_payments n WHERE n.opportunity_id = d.id)
