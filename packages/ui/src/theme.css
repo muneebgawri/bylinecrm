@@ -103,6 +103,38 @@
 }
 
 /*
+ * `bell-ring` — the bell swinging once when a notification arrives. Off when the OS asks for reduced motion.
+ */
+@keyframes bell-ring {
+    0%,
+    100% {
+        transform: rotate(0);
+    }
+    15% {
+        transform: rotate(14deg);
+    }
+    30% {
+        transform: rotate(-12deg);
+    }
+    45% {
+        transform: rotate(8deg);
+    }
+    60% {
+        transform: rotate(-6deg);
+    }
+    75% {
+        transform: rotate(3deg);
+    }
+}
+@utility bell-ring {
+    transform-origin: 50% 10%;
+    animation: bell-ring 0.9s ease-in-out both;
+    @media (prefers-reduced-motion: reduce) {
+        animation: none;
+    }
+}
+
+/*
  * `hero-in` — a piece of a signed-out page rising into place, 70ms after the piece before it
  * (`--i`, set inline). Off entirely when the OS asks for reduced motion.
  */

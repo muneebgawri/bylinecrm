@@ -370,6 +370,8 @@ model WorkspaceMember {
   notifyEmailReplies Boolean @default(true) @map("notify_email_replies")
   notifyEmailClicks  Boolean @default(true) @map("notify_email_clicks")
   notifyEmailOpens   Boolean @default(true) @map("notify_email_opens")
+  /// The short sound the app plays when a notification arrives; on unless turned off.
+  notifySound        Boolean @default(true) @map("notify_sound")
 
   transfersFrom     OwnershipTransfer[] @relation("TransferFrom")
   releasedRecordsOf OwnershipSettings[] @relation("OwnershipReleaseTo")

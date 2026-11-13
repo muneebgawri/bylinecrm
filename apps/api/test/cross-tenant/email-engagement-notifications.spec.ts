@@ -288,6 +288,7 @@ describe('email engagement notifications: replies, clicks and opens of a memberâ
             notifyEmailReplies: true,
             notifyEmailClicks: true,
             notifyEmailOpens: false,
+            notifySound: true,
         });
         const out = await send(`Opens off ${stamp}`);
         await deliver(tracked('email.opened', out, null));
@@ -301,6 +302,7 @@ describe('email engagement notifications: replies, clicks and opens of a memberâ
             notifyEmailReplies: false,
             notifyEmailClicks: true,
             notifyEmailOpens: false,
+            notifySound: true,
         });
         const reply = await replyMessage(`Re: Opens off ${stamp}`);
         await deliver(replied(out, reply));
