@@ -1,6 +1,6 @@
 import { Body, Delete, Get, Header, HttpCode, Param, ParseUUIDPipe, Patch, Post, Query, Res } from '@nestjs/common';
 import type { Response } from 'express';
-import type { BulkResult } from '@bylinecrm/shared';
+import type { BulkResult, Trashed } from '@bylinecrm/shared';
 import { BulkBodyDto, ExportBodyDto, ExportQueryDto, GroupByQueryDto, QueryBodyDto } from '../query/dto';
 import { ExportService } from '../query/export.service';
 import type { Group } from '../query/group-by';
@@ -17,6 +17,7 @@ import {
     AddressCheckQueryDto,
     CreatePersonDto,
     ListCustomFieldsQueryDto,
+    DeleteRecordQueryDto,
     ListQueryDto,
     UpdateCompanyDto,
     UpdateCustomFieldDto,
@@ -31,10 +32,12 @@ import {
     addressCheckView,
     bulkResultView,
     companyPage,
+    trashedCompanyPage,
     companyView,
     customFieldView,
     personCreatedView,
     personPage,
+    trashedPersonPage,
     personView,
     type PersonCreatedView,
 } from './responses';
@@ -119,9 +122,9 @@ export class PeopleController {
 
     @Requires('record:write')
     @Get('deleted')
-    @Returns(personPage)
-    listDeleted(@Query() query: ListQueryDto): Promise<CountedPage<PersonView>> {
-        return this.people.list(query, true);
+    @Returns(trashedPersonPage)
+    listDeleted(@Query() query: ListQueryDto): Promise<CountedPage<Trashed<PersonView>>> {
+        return this.people.listDeleted(query);
     }
 
     @Requires('record:write')
@@ -155,8 +158,8 @@ export class PeopleController {
     @Requires('record:write')
     @HttpCode(204)
     @Delete(':personId')
-    remove(@Param('personId', ParseUUIDPipe) personId: string): Promise<void> {
-        return this.people.remove(personId);
+    remove(@Param('personId', ParseUUIDPipe) personId: string, @Query() why: DeleteRecordQueryDto): Promise<void> {
+        return this.people.remove(personId, why);
     }
 
     @Requires('record:write')
@@ -242,9 +245,9 @@ export class CompaniesController {
 
     @Requires('record:write')
     @Get('deleted')
-    @Returns(companyPage)
-    listDeleted(@Query() query: ListQueryDto): Promise<CountedPage<CompanyView>> {
-        return this.companies.list(query, true);
+    @Returns(trashedCompanyPage)
+    listDeleted(@Query() query: ListQueryDto): Promise<CountedPage<Trashed<CompanyView>>> {
+        return this.companies.listDeleted(query);
     }
 
     @Requires('record:read')
@@ -271,8 +274,8 @@ export class CompaniesController {
     @Requires('record:write')
     @HttpCode(204)
     @Delete(':companyId')
-    remove(@Param('companyId', ParseUUIDPipe) companyId: string): Promise<void> {
-        return this.companies.remove(companyId);
+    remove(@Param('companyId', ParseUUIDPipe) companyId: string, @Query() why: DeleteRecordQueryDto): Promise<void> {
+        return this.companies.remove(companyId, why);
     }
 
     @Requires('record:write')

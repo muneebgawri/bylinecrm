@@ -5,6 +5,7 @@ import {
     BULK_MAX_IDS,
     type BulkResult,
     type BulkRowResult,
+    type DeleteReason,
     type DomainEvent,
     type FilterGroup,
     type RecordObject,
@@ -15,6 +16,7 @@ import { WorkspaceContext, type WorkspaceRunContext } from '../../infra/workspac
 import { listScope } from '../../query/query.service';
 import { rowIds } from '../../query/rows';
 import { CustomFieldsService } from '../custom-fields/custom-fields.service';
+import type { DeletionWhy } from '../deletion';
 import { recordWhere, resolveOwner } from '../record-scope';
 import { assertOwnerIsMember } from '../references';
 
@@ -33,7 +35,12 @@ export interface BulkRecords {
         id: string,
         patch: { ownerId: string | null },
     ): Promise<{ event: DomainEvent | null }>;
-    removeIn(tx: WorkspaceClient, context: WorkspaceRunContext, id: string): Promise<{ event: DomainEvent }>;
+    removeIn(
+        tx: WorkspaceClient,
+        context: WorkspaceRunContext,
+        id: string,
+        why?: DeletionWhy,
+    ): Promise<{ event: DomainEvent }>;
     restoreIn(tx: WorkspaceClient, context: WorkspaceRunContext, id: string): Promise<{ event: DomainEvent }>;
 }
 
@@ -46,6 +53,9 @@ export interface BulkRequest {
     q?: string | undefined;
     /** `assign_owner` only: the member to own the records, or `null` for nobody. */
     ownerId?: string | null | undefined;
+    /** `delete` only: why the records are deleted, and a note. */
+    reason?: DeleteReason | undefined;
+    note?: string | undefined;
 }
 
 /** Ids in the order first named, each once. */
@@ -116,6 +126,7 @@ export class BulkService {
                     chunk,
                     deleted,
                     ownerId ?? null,
+                    { reason: request.reason, note: request.note },
                 );
                 await this.events.recordAll(tx, applied.events);
                 return applied.rows;
@@ -151,6 +162,7 @@ export class BulkService {
         chunk: string[],
         deleted: boolean,
         ownerId: string | null,
+        why: DeletionWhy,
     ): Promise<{ rows: BulkRowResult[]; events: DomainEvent[] }> {
         const actionable = new Set(
             await rowIds(tx, records.object, { id: { in: chunk }, ...recordWhere(context, deleted) }, [], chunk.length),
@@ -163,7 +175,7 @@ export class BulkService {
                 continue;
             }
             try {
-                const { event } = await write(records, action, tx, context, id, ownerId);
+                const { event } = await write(records, action, tx, context, id, ownerId, why);
                 if (event) {
                     events.push(event);
                     rows.push({ id, ok: true });
@@ -193,12 +205,13 @@ function write(
     context: WorkspaceRunContext,
     id: string,
     ownerId: string | null,
+    why: DeletionWhy,
 ): Promise<{ event: DomainEvent | null }> {
     switch (action) {
         case 'assign_owner':
             return records.updateIn(tx, context, id, { ownerId });
         case 'delete':
-            return records.removeIn(tx, context, id);
+            return records.removeIn(tx, context, id, why);
         case 'restore':
             return records.restoreIn(tx, context, id);
     }

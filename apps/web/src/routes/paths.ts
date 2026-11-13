@@ -29,6 +29,8 @@ export const paths = {
     companies: (workspaceId: string) => `/w/${workspaceId}/companies`,
     company: (workspaceId: string, companyId: string) => `/w/${workspaceId}/companies/${companyId}`,
     deals: (workspaceId: string) => `/w/${workspaceId}/deals`,
+    /** Deleted people and companies, with who deleted each and why, and Restore. */
+    trash: (workspaceId: string) => `/w/${workspaceId}/trash`,
     deal: (workspaceId: string, dealId: string) => `/w/${workspaceId}/deals/${dealId}`,
     /** INV-2: a paid invoice NewswireOS reported, waiting for someone to choose its deal. */
     payment: (workspaceId: string, paymentId: string) => `/w/${workspaceId}/payments/${paymentId}`,

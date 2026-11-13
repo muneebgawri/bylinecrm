@@ -6,6 +6,8 @@ import {
     RECORD_OBJECTS,
     SEARCH_GROUP_LIMIT_DEFAULT,
     SEARCH_GROUP_LIMIT_MAX,
+    DELETE_NOTE_MAX,
+    DELETE_REASONS,
 } from '@bylinecrm/shared';
 import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
@@ -84,6 +86,12 @@ export class BulkBodyDto extends createZodDto(
             view: viewParam.optional(),
             q: q.optional(),
             ownerId: z.uuid().nullable().optional(),
+            reason: z.enum(DELETE_REASONS).optional().meta({ description: '`delete` only: why.' }),
+            note: z.string().trim().min(1).max(DELETE_NOTE_MAX).optional().meta({ description: '`delete` only.' }),
+        })
+        .refine((b) => b.action === 'delete' || (b.reason === undefined && b.note === undefined), {
+            message: 'reason and note go with delete, and only with it',
+            path: ['reason'],
         })
         .refine(
             (b) => (b.ids !== undefined) !== (b.filter !== undefined || b.view !== undefined || b.q !== undefined),

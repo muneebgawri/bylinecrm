@@ -231,6 +231,62 @@ describe('records', () => {
                 .expect(404);
         });
 
+        it('a delete says why; the trash lists it with who and why, in the caller’s scope; a restore clears it', async () => {
+            const unique = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+            const created = await as(admin)
+                .post(w('/people'))
+                .send({
+                    nameFirst: 'Trashed',
+                    nameLast: unique,
+                    emails: { primary: `trashed-${unique}@gmail.com`, additional: [] },
+                })
+                .expect(201);
+            const id = (created.body as { id: string }).id;
+            const inTrash = async (who: typeof admin) =>
+                (
+                    (await as(who).get(w('/people/deleted?limit=200&sort=updatedAt:desc')).expect(200)).body as {
+                        items: {
+                            id: string;
+                            deletion: {
+                                at: string;
+                                reason: string | null;
+                                note: string | null;
+                                byMemberId: string | null;
+                            };
+                        }[];
+                    }
+                ).items.find((p) => p.id === id);
+
+            await as(admin)
+                .delete(w(`/people/${id}?reason=nonsense`))
+                .expect(400);
+            await as(admin)
+                .delete(w(`/people/${id}?reason=duplicate&note=Saved%20twice`))
+                .expect(204);
+            expect(await inTrash(admin)).toMatchObject({
+                deletion: { reason: 'duplicate', note: 'Saved twice', byMemberId: adminMemberId },
+            });
+            // Another member's deleted record is not in an own-scoped member's trash.
+            expect(await inTrash(rep)).toBeUndefined();
+
+            await as(admin)
+                .post(w(`/people/${id}/restore`))
+                .expect(201);
+            expect(await inTrash(admin)).toBeUndefined();
+
+            // In bulk, the reason goes with every record; said with another action, it is refused.
+            await as(admin)
+                .post(w('/people/bulk'))
+                .send({ action: 'restore', ids: [id], reason: 'other' })
+                .expect(400);
+            await as(admin)
+                .post(w('/people/bulk'))
+                .send({ action: 'delete', ids: [id], reason: 'not_a_lead' })
+                .expect(200);
+            expect(await inTrash(admin)).toMatchObject({ deletion: { reason: 'not_a_lead', note: null } });
+            await app.get(PrismaService).person.deleteMany({ where: { id } });
+        });
+
         it('the restrictive policy holds even when the application forgets the filter', async () => {
             const rls = app.get(RlsPrismaService);
             const context = app.get(WorkspaceContext);

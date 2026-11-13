@@ -3,6 +3,7 @@ import {
     LOST_REASONS,
     OWNERSHIP_CONFLICT_KINDS,
     BULK_ROW_ERRORS,
+    DELETE_REASONS,
     CUSTOM_FIELD_TYPES,
     RECORD_OBJECTS,
     TASK_STATUSES,
@@ -46,6 +47,17 @@ const related = (what: string) =>
 const owner = memberSummaryView.nullable().meta({ description: 'The owner, by name; null when the record has none.' });
 
 /** A person (PAR-001). */
+/** A trashed record's deletion, as the trash lists it. */
+const recordDeletion = z.object({
+    at: z.iso.datetime(),
+    reason: z
+        .enum(DELETE_REASONS)
+        .nullable()
+        .meta({ description: 'Why, as whoever deleted it said; null when unsaid.' }),
+    note: z.string().nullable(),
+    byMemberId: z.uuid().nullable().meta({ description: 'The member who deleted it; null for an API key or a job.' }),
+});
+
 export const personView = named(
     'Person',
     z.object({
@@ -116,6 +128,10 @@ export type AddressCheckView = z.output<typeof addressCheckView>;
 export type OwnerLoadView = z.output<typeof ownerLoadView>;
 
 export const personPage = named('PersonPage', countedPage(personView));
+export const trashedPersonPage = named(
+    'TrashedPersonPage',
+    countedPage(personView.extend({ deletion: recordDeletion })),
+);
 
 /** `POST /people`: the person, and the deal made with them when the request asked for one (`withDeal`). */
 export const personCreatedView = named(
@@ -153,6 +169,10 @@ export const companyView = named(
     }),
 );
 export const companyPage = named('CompanyPage', countedPage(companyView));
+export const trashedCompanyPage = named(
+    'TrashedCompanyPage',
+    countedPage(companyView.extend({ deletion: recordDeletion })),
+);
 
 /** A deal (PAR-007), with the stage fields P1-2 computes from its history. */
 export const opportunityView = named(
@@ -206,6 +226,10 @@ export const opportunityView = named(
     }),
 );
 export const opportunityPage = named('OpportunityPage', countedPage(opportunityView));
+export const trashedOpportunityPage = named(
+    'TrashedOpportunityPage',
+    countedPage(opportunityView.extend({ deletion: recordDeletion })),
+);
 
 /** A note and the records it is attached to (PAR-010). */
 export const noteView = named(
