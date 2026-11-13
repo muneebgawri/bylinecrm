@@ -258,6 +258,20 @@ describe('OWN-2 company-domain ownership (FR-CRMS-20)', () => {
         expect(moved.ownerId).toBe(anaId);
     });
 
+    it('a manager reads who holds how many leads; a member may not', async () => {
+        expect((await as(ana).get(w('/ownership/load'))).status).toBe(403);
+        const rows = (await as(mia).get(w('/ownership/load')).expect(200)).body as {
+            member: { memberId: string } | null;
+            people: number;
+            newPeople: number;
+            openDeals: number;
+        }[];
+        const anas = rows.find((r) => r.member?.memberId === anaId);
+        expect(anas?.people, 'Ana owns Raj after the resolve, and the people she saved').toBeGreaterThanOrEqual(1);
+        expect(anas?.openDeals).toBeGreaterThanOrEqual(1);
+        expect(rows.map((r) => r.people)).toEqual([...rows.map((r) => r.people)].sort((a, b) => b - a));
+    });
+
     it('FR-CRMS-20 (OWN-2c): www., any subdomain, a scheme or a path is the same company; domains are stored registrable', async () => {
         for (const variant of [
             `www.${domain}`,

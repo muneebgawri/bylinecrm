@@ -31,6 +31,8 @@ export const open = (board: BoardView | undefined) => (board?.columns ?? []).fil
 export const won = (board: BoardView | undefined) => (board?.columns ?? []).filter((c) => c.stage.kind === 'won');
 export const lost = (board: BoardView | undefined) => (board?.columns ?? []).filter((c) => c.stage.kind === 'lost');
 export const count = (columns: readonly BoardColumn[]) => columns.reduce((n, c) => n + c.count, 0);
+/** Of `count`, the deals with an amount above zero: the ones a pipeline value adds up. */
+export const valuedCount = (columns: readonly BoardColumn[]) => columns.reduce((n, c) => n + c.valuedCount, 0);
 export const deals = (columns: readonly BoardColumn[]) => columns.flatMap((c) => c.deals);
 
 /** A deal's probability: its own, else its stage's. */

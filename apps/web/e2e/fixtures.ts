@@ -490,6 +490,7 @@ export const board: BoardView = {
         return {
             stage,
             count: inStage.length,
+            valuedCount: inStage.filter((d) => (d.amount?.amountMinor ?? 0) > 0).length,
             amountMinorByCurrency: inStage.length ? { USD: total } : {},
             deals: inStage,
             hasMore: false,

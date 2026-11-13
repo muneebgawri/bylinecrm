@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { request } from './client';
 import { workspacePath } from './endpoints';
-import type { CompanyDomainView, OwnershipConflictView, OwnershipSettingsView } from './types';
+import type { CompanyDomainView, OwnerLoadView, OwnershipConflictView, OwnershipSettingsView } from './types';
 
 /**
  * Company-domain ownership (OWN-2, #201): a company's other domains, and the records that disagree with
@@ -11,6 +11,7 @@ import type { CompanyDomainView, OwnershipConflictView, OwnershipSettingsView } 
 
 const keys = {
     conflicts: (workspaceId: string) => ['w', workspaceId, 'ownership', 'conflicts'] as const,
+    load: (workspaceId: string) => ['w', workspaceId, 'ownership', 'load'] as const,
     settings: (workspaceId: string) => ['w', workspaceId, 'ownership', 'settings'] as const,
     domains: (workspaceId: string, companyId: string) => ['w', workspaceId, 'company', companyId, 'domains'] as const,
 };
@@ -22,6 +23,8 @@ export const ownership = {
         request<OwnershipSettingsView>('PUT', workspacePath(workspaceId, '/ownership/settings'), { body: input }),
     conflicts: (workspaceId: string, signal?: AbortSignal) =>
         request<OwnershipConflictView[]>('GET', workspacePath(workspaceId, '/ownership/conflicts'), { signal }),
+    load: (workspaceId: string, signal?: AbortSignal) =>
+        request<OwnerLoadView[]>('GET', workspacePath(workspaceId, '/ownership/load'), { signal }),
     resolve: (workspaceId: string, items: readonly { object: 'person' | 'opportunity'; recordId: string }[]) =>
         request<{ resolved: string[]; skipped: string[] }>(
             'POST',
@@ -45,6 +48,15 @@ export function useOwnershipConflicts(workspaceId: string, enabled = true) {
     return useQuery({
         queryKey: keys.conflicts(workspaceId),
         queryFn: ({ signal }) => ownership.conflicts(workspaceId, signal),
+        enabled,
+    });
+}
+
+/** Who holds how many leads (Reports): managers only (`record:transfer`), so asked only when `enabled`. */
+export function useOwnerLoad(workspaceId: string, enabled = true) {
+    return useQuery({
+        queryKey: keys.load(workspaceId),
+        queryFn: ({ signal }) => ownership.load(workspaceId, signal),
         enabled,
     });
 }

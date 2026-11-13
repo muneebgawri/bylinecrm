@@ -42,6 +42,8 @@ import { useMemo, useState, type ReactNode } from 'react';
 import { Link } from 'react-router';
 import { useDefaultBoard } from '../../../api/deals';
 import { useMeetingKpis } from '../../../api/meetings';
+import { useOwnerLoad } from '../../../api/ownership';
+import { useCan } from '../../../auth/capabilities';
 import type { OpportunityView } from '../../../api/types';
 import { formatMoneyCompact } from '../../../lib/money';
 import { formatRelative } from '../../../lib/format';
@@ -61,6 +63,7 @@ import {
     percentChange,
     probabilityOf,
     sumOf,
+    valuedCount,
     winRate,
     wonByOwner,
     monthsIn,
@@ -229,10 +232,15 @@ export function ReportsPage() {
                                         <div className="text-2xl font-semibold tracking-tight tabular-nums">
                                             {money(sumOf(open(data), currency).amountMinor)}
                                         </div>
-                                        <div className="text-xs text-text-muted">Active pipeline value</div>
+                                        <div className="text-xs text-text-muted">
+                                            Active pipeline value · {valuedCount(open(data)).toLocaleString()} deals
+                                            with a value
+                                        </div>
                                     </div>
                                     <div className="text-right">
-                                        <div className="text-lg font-semibold tabular-nums">{count(open(data))}</div>
+                                        <div className="text-lg font-semibold tabular-nums">
+                                            {count(open(data)).toLocaleString()}
+                                        </div>
                                         <div className="text-xs text-text-muted">Open deals</div>
                                     </div>
                                 </div>
@@ -273,6 +281,8 @@ export function ReportsPage() {
                 <TeamCard workspaceId={workspaceId} className="col-span-12 lg:col-span-4" />
                 <TopOpenDealsCard workspaceId={workspaceId} className="col-span-12 lg:col-span-4" money={money} />
             </div>
+
+            <LeadsByOwnerCard workspaceId={workspaceId} />
 
             <div className="grid grid-cols-12 gap-4">
                 <Card className="col-span-12 gap-4">
@@ -723,6 +733,75 @@ function TeamCard({ workspaceId, className }: { workspaceId: string; className?:
                     </Link>
                 </Button>
             </CardFooter>
+        </Card>
+    );
+}
+
+/**
+ * Who holds how many leads: per owner, the people they own, how many of those are still new, and their open deals.
+ * A manager's view (`record:transfer`, as the server checks); nobody else is shown the card.
+ */
+function LeadsByOwnerCard({ workspaceId }: { workspaceId: string }) {
+    const allowed = useCan('record:transfer');
+    const load = useOwnerLoad(workspaceId, allowed);
+    if (!allowed) return null;
+    const rows = load.data ?? [];
+    return (
+        <Card className="gap-0 py-0">
+            <CardHeader className="border-b border-border py-5">
+                <CardTitle className="text-base">Leads by owner</CardTitle>
+                <p className="m-0 mt-1 text-sm text-text-muted">
+                    People each member owns, how many are still new, and their open deals
+                </p>
+            </CardHeader>
+            <CardContent className="px-0">
+                {load.isError ? (
+                    <p className="m-0 px-6 py-8 text-center text-sm text-text-muted">Could not load the counts.</p>
+                ) : !load.data ? (
+                    <LoadingRegion label="Loading leads by owner">
+                        <Skeleton className="m-6 h-40" />
+                    </LoadingRegion>
+                ) : (
+                    <div className="max-h-[32rem] overflow-auto">
+                        <table className="w-full border-collapse text-sm">
+                            <thead className="sticky top-0 bg-surface text-[11px] font-medium tracking-wide text-text-muted uppercase">
+                                <tr>
+                                    <th className="px-6 py-2.5 text-left font-medium">Owner</th>
+                                    <th className="px-4 py-2.5 text-right font-medium">People</th>
+                                    <th className="px-4 py-2.5 text-right font-medium">Still new</th>
+                                    <th className="px-6 py-2.5 text-right font-medium">Open deals</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-border border-t border-border">
+                                {rows.map((r) => (
+                                    <tr key={r.member?.memberId ?? 'nobody'}>
+                                        <td className="px-6 py-2.5">
+                                            <span className="flex items-center gap-3">
+                                                {r.member ? (
+                                                    <Avatar name={r.member.name ?? 'Unnamed member'} size="sm" />
+                                                ) : null}
+                                                <span className={cn('truncate', !r.member && 'text-text-muted')}>
+                                                    {r.member ? (r.member.name ?? 'Unnamed member') : 'No owner'}
+                                                </span>
+                                                {r.member?.leftAt && <Badge status="warning">Left</Badge>}
+                                            </span>
+                                        </td>
+                                        <td className="px-4 py-2.5 text-right tabular-nums">
+                                            {r.people.toLocaleString()}
+                                        </td>
+                                        <td className="px-4 py-2.5 text-right tabular-nums">
+                                            {r.newPeople.toLocaleString()}
+                                        </td>
+                                        <td className="px-6 py-2.5 text-right tabular-nums">
+                                            {r.openDeals.toLocaleString()}
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                )}
+            </CardContent>
         </Card>
     );
 }

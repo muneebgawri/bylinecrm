@@ -60,6 +60,7 @@ export function DashboardKpis({ workspaceId }: { workspaceId: string }) {
     const won = columns.filter((c) => c.stage.kind === 'won');
     const openCount = open.reduce((n, c) => n + c.count, 0);
     const wonCount = won.reduce((n, c) => n + c.count, 0);
+    const valued = open.reduce((n, c) => n + c.valuedCount, 0);
     const people = counts.get(undefined);
     const companyCount = companies.get(undefined);
     const ready = board.data || board.isError;
@@ -98,7 +99,11 @@ export function DashboardKpis({ workspaceId }: { workspaceId: string }) {
                         tone="success"
                         label="Pipeline value"
                         value={money(sumMinor(open), open)}
-                        footnote="open deals, at face value"
+                        footnote={
+                            valued === openCount
+                                ? 'open deals, at face value'
+                                : `${valued.toLocaleString()} of ${openCount.toLocaleString()} open deals have a value`
+                        }
                     />
                 ) : (
                     skeletonKpi
@@ -185,7 +190,11 @@ export function PipelinePulseCard({ workspaceId, className }: { workspaceId: str
                     <>
                         <div className="divide-y divide-border">
                             <Metric label="Pipeline value" value={money(sumMinor(open), open)} />
-                            <Metric label="Open deals" value={open.reduce((n, c) => n + c.count, 0).toString()} />
+                            <Metric label="Open deals" value={open.reduce((n, c) => n + c.count, 0).toLocaleString()} />
+                            <Metric
+                                label="With a value"
+                                value={open.reduce((n, c) => n + c.valuedCount, 0).toLocaleString()}
+                            />
                             <Metric label="Avg. time in stage" value={`${avgDays} ${avgDays === 1 ? 'day' : 'days'}`} />
                         </div>
                         <div className="rounded-lg bg-surface-raised p-4">

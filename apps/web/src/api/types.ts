@@ -331,6 +331,7 @@ export type TransferView = Schemas['Transfer'];
 export type TransferPreviewView = Schemas['TransferPreview'];
 export type CompanyDomainView = Schemas['CompanyDomain'];
 export type OwnershipConflictView = Schemas['OwnershipConflict'];
+export type OwnerLoadView = Schemas['OwnerLoad'];
 export type OwnershipSettingsView = Schemas['OwnershipSettings'];
 export type NotificationSettingsView = Schemas['NotificationSettings'];
 export type MyTaskView = Schemas['MyTask'];

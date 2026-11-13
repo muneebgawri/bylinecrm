@@ -100,6 +100,7 @@ const board = (): BoardView => ({
         return {
             stage: s,
             count: deals.length,
+            valuedCount: deals.length,
             amountMinorByCurrency: deals.length ? { USD: 1_200_000 * deals.length } : {},
             deals,
             hasMore: false,
@@ -154,6 +155,7 @@ function stubApi(moveResponse: (body: { stageId: string }) => Response) {
                     ...c,
                     deals,
                     count: deals.length,
+                    valuedCount: deals.length,
                     amountMinorByCurrency: deals.length ? { USD: 1_200_000 * deals.length } : {},
                 };
             }),
