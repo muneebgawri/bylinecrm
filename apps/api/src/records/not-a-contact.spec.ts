@@ -3,7 +3,7 @@ import { isSystemSender } from '@bylinecrm/shared';
 import { notAContactReason } from './not-a-contact';
 
 describe('not a contact (#383)', () => {
-    const staff = new Set(['kate@pinion.test', 'media@pinion.test']);
+    const staff = { addresses: new Set(['kate@pinion.test', 'media@pinion.test']), domains: new Set(['pinion.test']) };
 
     it('names automated senders by their local part, with or without a suffix, whatever the case or domain', () => {
         for (const address of [
@@ -43,5 +43,14 @@ describe('not a contact (#383)', () => {
         expect(notAContactReason(' media@pinion.test ', staff)).toMatch(/mailbox/);
         expect(notAContactReason('Postmaster@Somewhere.test', staff)).toMatch(/automated sender/);
         expect(notAContactReason('dana@example.test', staff)).toBeNull();
+    });
+
+    it("refuses anyone at the workspace's own domain, and no one at a lookalike", () => {
+        expect(notAContactReason('Former.Colleague@Pinion.test', staff)).toMatch(/own domain/);
+        expect(notAContactReason('sales@pinion.test', staff)).toMatch(/own domain/);
+        expect(notAContactReason('dana@pinion.test.example', staff)).toBeNull();
+        expect(notAContactReason('dana@notpinion.test', staff)).toBeNull();
+        const noDomains = { addresses: staff.addresses, domains: new Set<string>() };
+        expect(notAContactReason('former@pinion.test', noDomains)).toBeNull();
     });
 });

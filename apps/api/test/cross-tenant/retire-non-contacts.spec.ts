@@ -32,7 +32,7 @@ function browserFrom(res: Response): Browser {
  * and on edit; `retire-non-contacts.js` retires the ones that got in before the rule, through the people service's
  * own delete, keeping any a deal points at or that carries notes or tasks.
  */
-describe('retire-non-contacts: colleagues and automated senders are not contacts', () => {
+describe('retire-non-contacts: colleagues, anyone at the workspace’s domains, and automated senders are not contacts', () => {
     let app: INestApplication;
     let http: () => request.Agent;
     let owner: PrismaService;
@@ -45,6 +45,7 @@ describe('retire-non-contacts: colleagues and automated senders are not contacts
     let lead: string;
     /** The admin's own sign-in address, as a person: retired. */
     let colleague: string;
+    let former: string;
     /** A bounce handler, as a person: retired. */
     let bounce: string;
     /** A notification stream that a deal points at: kept for a human. */
@@ -89,8 +90,20 @@ describe('retire-non-contacts: colleagues and automated senders are not contacts
         admin = browserFrom(res);
         workspace = (res.body as { workspace: { id: string } }).workspace.id;
 
+        // The workspace's Google Workspace domain, as its delegation lists it: anyone there is a colleague.
+        await owner.googleWorkspaceDelegation.create({
+            data: {
+                workspaceId: workspace,
+                keyCiphertext: '',
+                clientEmail: `sa@pinion-${stamp}.test`,
+                clientId: stamp,
+                privateKeyIdLast4: '0000',
+                allowedDomains: [`pinion-${stamp}.test`],
+            },
+        });
         lead = id(await person('Lead', `lead-${stamp}@example.test`).expect(201));
         colleague = await seeded('Colleague', adminEmail);
+        former = await seeded('Former', `former-${stamp}@pinion-${stamp}.test`);
         bounce = await seeded('Bounce', `mailer-daemon@mx-${stamp}.test`);
         notifier = await seeded('Notifier', `notifications@tool-${stamp}.test`);
         const company = id(
@@ -124,6 +137,9 @@ describe('retire-non-contacts: colleagues and automated senders are not contacts
         const member = await person('Me', adminEmail.toUpperCase());
         expect(member.status).toBe(422);
         expect((member.body as { message: string }).message).toMatch(/member/);
+        const alias = await person('Alias', `Sales@Pinion-${stamp}.test`);
+        expect(alias.status).toBe(422);
+        expect((alias.body as { message: string }).message).toMatch(/own domain/);
         const daemon = await person('Daemon', `postmaster@elsewhere-${stamp}.test`);
         expect(daemon.status).toBe(422);
         expect((daemon.body as { message: string }).message).toMatch(/automated sender/);
@@ -138,28 +154,29 @@ describe('retire-non-contacts: colleagues and automated senders are not contacts
             .expect(200);
     });
 
-    it('estimates without writing: the colleague and the bounce would go, the notifier a deal points at stays', async () => {
+    it('estimates without writing: the colleague, the former colleague and the bounce would go, the notifier a deal points at stays', async () => {
         const report = await retireNonContacts(app, workspace, { apply: false });
         expect(report).toEqual({
-            candidates: 3,
-            staff: 1,
+            candidates: 4,
+            staff: 2,
             system: 2,
-            retired: 2,
+            retired: 3,
             kept: { deals: 1, notes: 0, tasks: 0 },
         });
-        for (const p of [lead, colleague, bounce, notifier]) expect(await live(p), p).toBe(true);
+        for (const p of [lead, colleague, former, bounce, notifier]) expect(await live(p), p).toBe(true);
     });
 
     it('retires them through the people service: deleted by the system, announced, the rest untouched', async () => {
         const report = await retireNonContacts(app, workspace, { apply: true, chunk: 1 });
         expect(report).toEqual({
-            candidates: 3,
-            staff: 1,
+            candidates: 4,
+            staff: 2,
             system: 2,
-            retired: 2,
+            retired: 3,
             kept: { deals: 1, notes: 0, tasks: 0 },
         });
         expect(await live(colleague)).toBe(false);
+        expect(await live(former)).toBe(false);
         expect(await live(bounce)).toBe(false);
         expect(await live(notifier)).toBe(true);
         expect(await live(lead)).toBe(true);
@@ -168,7 +185,7 @@ describe('retire-non-contacts: colleagues and automated senders are not contacts
             select: { payload: true },
         });
         const deleted = announced.map((e) => e.payload as { recordId: string; actor: { kind: string } });
-        expect(deleted.map((d) => d.recordId).sort()).toEqual([bounce, colleague].sort());
+        expect(deleted.map((d) => d.recordId).sort()).toEqual([bounce, colleague, former].sort());
         expect(deleted.every((d) => d.actor.kind === 'system')).toBe(true);
     });
 
