@@ -24,6 +24,9 @@ export function quietWorkers(): void {
         'ENRICHMENT_WORKER',
         'OUTBOX_RELAY',
         'TRANSACTIONAL_MAIL_RELAY',
+        // The NewswireOS workers (invoice checks, ownership and deal-won pushes): a job's container would otherwise be
+        // a second sender against NewswireOS's rate limit.
+        'INVOICE_WORKER',
     ]) {
         process.env[flag] = '0';
     }

@@ -5,14 +5,17 @@ import {
     OWNERSHIP_PUSH_ATTEMPTS,
     OWNERSHIP_PUSH_JOB,
     OWNERSHIP_PUSH_QUEUE,
+    OWNERSHIP_PUSH_RATE,
     OWNERSHIP_PUSH_SWEEP_EVERY_MS,
+    OWNERSHIP_PUSH_THROTTLED_WAIT_MS,
 } from './invoices.constants';
 import { OwnershipPushService, type OwnershipPushJob } from './ownership-push.service';
 
 /**
  * Pushes ownership changes to NewswireOS (PNW-765) in the process that verifies invoices (`INVOICE_WORKER`, the
  * NewswireOS worker). A retryable failure throws, so the queue's backoff tries again; the last attempt settles the
- * delivery as `failed` instead.
+ * delivery as `failed` instead. Paced by the queue's limiter (`OWNERSHIP_PUSH_RATE`); a 429 regardless pauses the
+ * queue (`OWNERSHIP_PUSH_THROTTLED_WAIT_MS`) and puts the job back without spending an attempt.
  */
 @Injectable()
 export class OwnershipPushWorker implements OnApplicationBootstrap, OnModuleDestroy {
@@ -29,6 +32,7 @@ export class OwnershipPushWorker implements OnApplicationBootstrap, OnModuleDest
         if (!this.env.INVOICE_WORKER) return;
         this.worker = new Worker<OwnershipPushJob>(OWNERSHIP_PUSH_QUEUE, (job) => this.process(job), {
             connection: { url: this.env.REDIS_URL, maxRetriesPerRequest: null },
+            limiter: { ...OWNERSHIP_PUSH_RATE },
         });
         this.worker.on('error', (error) => this.logger.error(`worker ${OWNERSHIP_PUSH_QUEUE}: ${error.message}`));
         this.sweepTimer = setInterval(() => void this.sweepOnce(), OWNERSHIP_PUSH_SWEEP_EVERY_MS);
@@ -53,6 +57,10 @@ export class OwnershipPushWorker implements OnApplicationBootstrap, OnModuleDest
         if (job.name !== OWNERSHIP_PUSH_JOB) return;
         const finalAttempt = job.attemptsMade + 1 >= (job.opts.attempts ?? OWNERSHIP_PUSH_ATTEMPTS);
         const outcome = await this.push.deliver(job.data.workspaceId, job.data.deliveryId, { finalAttempt });
+        if (outcome === 'throttled' && this.worker) {
+            await this.worker.rateLimit(OWNERSHIP_PUSH_THROTTLED_WAIT_MS);
+            throw Worker.RateLimitError();
+        }
         if (outcome === 'retry') throw new Error('NewswireOS did not take the ownership change; retrying');
     }
 }
