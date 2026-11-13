@@ -1,4 +1,13 @@
-import { ID_FIELD, LIST_LIMIT_DEFAULT, SEQUENCE_LIMITS, type ViewColumn, type ViewSort } from '@bylinecrm/shared';
+import {
+    DELETE_NOTE_MAX,
+    DELETE_REASONS,
+    ID_FIELD,
+    LIST_LIMIT_DEFAULT,
+    SEQUENCE_LIMITS,
+    type DeleteReason,
+    type ViewColumn,
+    type ViewSort,
+} from '@bylinecrm/shared';
 import {
     BulkBar,
     BulkBarAction,
@@ -6,19 +15,27 @@ import {
     cn,
     DataTableChrome,
     EmptyState,
+    Field,
     LoadingRegion,
     PageHeader,
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
     Skeleton,
+    Textarea,
     toast,
     useIsMobile,
 } from '@bylinecrm/ui';
-import { Building2, Plus, Search, Upload, Users } from 'lucide-react';
+import { Building2, Plus, Search, Trash2, Upload, Users } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useLocation, useNavigate } from 'react-router';
+import { Link, useLocation, useNavigate } from 'react-router';
 import { useCustomFields, useMembersById, useViews } from '../../../api/records';
 import { useBulkChange, useRecordPages, useViewCounts, type ListCount } from '../../../api/lists';
 import { companies as companiesApi, people as peopleApi } from '../../../api/records';
 import { useCan, useMembership, usePermission } from '../../../auth/capabilities';
+import { DELETE_REASON_LABEL } from '../../../lib/deleteReasons';
 import { useDebounced } from '../../../lib/useDebounced';
 import { useKeyedState } from '../../../lib/useKeyedState';
 import { saveFile } from '../../../lib/saveFile';
@@ -152,6 +169,14 @@ function RecordListPage<O extends ListObject>({ object }: { object: O }) {
     const enrol = useCan('sequence:enrol');
     const [enrolling, setEnrolling] = useState<EnrolPerson[] | null>(null);
     const [deleting, setDeleting] = useState<string[] | null>(null);
+    /** Why the records are deleted: chosen before the delete is sent, shown in the trash. */
+    const [deleteReason, setDeleteReason] = useState<DeleteReason | ''>('');
+    const [deleteNote, setDeleteNote] = useState('');
+    const closeDelete = () => {
+        setDeleting(null);
+        setDeleteReason('');
+        setDeleteNote('');
+    };
     /** The "new" dialog from the list's own button. */
     const [adding, setCreating] = useState(false);
     // `?create=1` / `?create=lead` (the nav's "Add person" / "Add lead", ⌘K) opens it as well, as the deals page does:
@@ -212,12 +237,18 @@ function RecordListPage<O extends ListObject>({ object }: { object: O }) {
 
     const removeIds = async (ids: string[]) => {
         try {
-            const result = await bulk.mutateAsync({ action: 'delete', ids });
+            const note = deleteNote.trim();
+            const result = await bulk.mutateAsync({
+                action: 'delete',
+                ids,
+                ...(deleteReason ? { reason: deleteReason } : {}),
+                ...(note ? { note } : {}),
+            });
             toast(bulkSummary('Deleted', copy, result));
         } catch (error) {
             toast({ title: 'Nothing was deleted', description: failureText(error), tone: 'danger' });
         }
-        setDeleting(null);
+        closeDelete();
         clearSelection();
     };
 
@@ -281,6 +312,13 @@ function RecordListPage<O extends ListObject>({ object }: { object: O }) {
                 subtitle={copy.subtitle}
                 actions={
                     <>
+                        {write.allowed && (
+                            <Button asChild shape="square" variant="ghost">
+                                <Link to={paths.trash(workspaceId)}>
+                                    <Trash2 aria-hidden /> Trash
+                                </Link>
+                            </Button>
+                        )}
                         <Button
                             shape="square"
                             disabled
@@ -527,17 +565,40 @@ function RecordListPage<O extends ListObject>({ object }: { object: O }) {
             )}
             <ConfirmDialog
                 open={deleting !== null}
-                onOpenChange={(o) => !o && setDeleting(null)}
+                onOpenChange={(o) => !o && closeDelete()}
                 title={
                     deleting?.length === 1
                         ? `Delete this ${copy.singular}?`
                         : `Delete ${deleting?.length ?? 0} ${copy.plural}?`
                 }
-                body="They move to the trash and can be restored from there."
+                body="Delete what is not a lead at all. They move to Trash, where they can be restored. A real lead you no longer work is better released from its Owner field, so someone else can have it."
                 confirm="Delete"
                 pending={bulk.isPending}
+                confirmDisabled={deleteReason === ''}
                 onConfirm={() => deleting && void removeIds(deleting)}
-            />
+            >
+                <Field label="Why" required>
+                    <Select value={deleteReason} onValueChange={(v) => setDeleteReason(v as DeleteReason)}>
+                        <SelectTrigger aria-label="Why">
+                            <SelectValue placeholder="Choose a reason" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {DELETE_REASONS.map((r) => (
+                                <SelectItem key={r} value={r}>
+                                    {DELETE_REASON_LABEL[r]}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                </Field>
+                <Field label="Note (optional)">
+                    <Textarea
+                        value={deleteNote}
+                        maxLength={DELETE_NOTE_MAX}
+                        onChange={(e) => setDeleteNote(e.target.value)}
+                    />
+                </Field>
+            </ConfirmDialog>
             {creating && (
                 <CreateRecordDialog
                     workspaceId={workspaceId}

@@ -37,6 +37,9 @@ export const transfers = {
         workspaceId: string,
         input: { object: RecordObject; recordId: string; toMemberId: string; reason?: string },
     ) => request<TransferView>('POST', workspacePath(workspaceId, '/transfers'), { body: input }),
+    /** The owner gives the record up: it goes to the house account (Settings → Ownership) at once. */
+    release: (workspaceId: string, input: { object: RecordObject; recordId: string; note?: string }) =>
+        request<TransferView>('POST', workspacePath(workspaceId, '/transfers/release'), { body: input }),
     decide: (workspaceId: string, id: string, action: 'accept' | 'decline' | 'cancel', note?: string) =>
         request<TransferView>('POST', workspacePath(workspaceId, `/transfers/${id}/${action}`), {
             body: note ? { note } : {},
@@ -69,6 +72,15 @@ export function useProposeTransfer(workspaceId: string) {
     return useMutation({
         mutationFn: (input: { object: RecordObject; recordId: string; toMemberId: string; reason?: string }) =>
             transfers.propose(workspaceId, input),
+        onSuccess: after,
+    });
+}
+
+export function useReleaseRecord(workspaceId: string) {
+    const after = useAfterTransfer(workspaceId);
+    return useMutation({
+        mutationFn: (input: { object: RecordObject; recordId: string; note?: string }) =>
+            transfers.release(workspaceId, input),
         onSuccess: after,
     });
 }

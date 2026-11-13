@@ -1,5 +1,5 @@
 import { ForbiddenException, Injectable, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
-import type { Actor, DomainEvent, Emails, FilterGroup, Links, Phones } from '@bylinecrm/shared';
+import type { Actor, DomainEvent, Emails, FilterGroup, Links, Phones, Trashed } from '@bylinecrm/shared';
 import type { Prisma } from '@prisma/client';
 import { DomainEvents } from '../events/domain-events.service';
 import { UniqueConflict, ValidationFailed } from '../infra/errors/api-errors';
@@ -18,6 +18,7 @@ import { diffOf, isEmpty, projectedChanges } from './diff';
 import { type CountedPage, countTotal, EMPTY_COUNTED_PAGE, paginate } from './list-query';
 import { listScope } from '../query/query.service';
 import { countRows } from '../query/rows';
+import { RESTORED, trashedNow, withDeletions, type DeletionWhy } from './deletion';
 import { recordWhere, resolveOwner } from './record-scope';
 import { assertContactAddress } from './not-a-contact';
 import { assertCompanyExists, assertOwnerIsMember, compact, stored } from './references';
@@ -120,7 +121,11 @@ export class PeopleService implements BulkRecords {
         return this.rls.withWorkspace(async (tx) => {
             const scope = await listScope(tx, context, this.customFields, 'person', query, deleted);
             if (scope.empty) return EMPTY_COUNTED_PAGE;
-            const where = scope.where as Prisma.PersonWhereInput;
+            // The trash lists what a person deleted. A duplicate merged into another person is not there: it is the
+            // survivor now, and cannot be restored.
+            const where: Prisma.PersonWhereInput = deleted
+                ? { AND: [scope.where as Prisma.PersonWhereInput, { mergedIntoId: null }] }
+                : (scope.where as Prisma.PersonWhereInput);
             const page = await paginate(query.limit, query.cursor, (args) =>
                 tx.person.findMany({
                     where,
@@ -242,12 +247,18 @@ export class PeopleService implements BulkRecords {
     }
 
     /** Soft: the row keeps its data and its place in the uniqueness index (PAR-079). */
-    async remove(id: string): Promise<void> {
+    async remove(id: string, why?: DeletionWhy): Promise<void> {
         const context = this.current();
         await this.rls.withWorkspace(async (tx) => {
-            const { event } = await this.removeIn(tx, context, id);
+            const { event } = await this.removeIn(tx, context, id, why);
             await this.events.record(tx, event);
         });
+    }
+
+    /** The trash, each record with when, why and by whom it was deleted. */
+    async listDeleted(query: ListQuery): Promise<CountedPage<Trashed<PersonView>>> {
+        const page = await this.list(query, true);
+        return this.rls.withWorkspace((tx) => withDeletions(tx, 'person', page));
     }
 
     async restore(id: string): Promise<PersonView> {
@@ -409,10 +420,15 @@ export class PeopleService implements BulkRecords {
         return new UniqueConflict('a person with that email exists', listed[0]?.field ?? 'emails.primary');
     }
 
-    async removeIn(tx: WorkspaceClient, context: WorkspaceRunContext, id: string): Promise<{ event: DomainEvent }> {
+    async removeIn(
+        tx: WorkspaceClient,
+        context: WorkspaceRunContext,
+        id: string,
+        why?: DeletionWhy,
+    ): Promise<{ event: DomainEvent }> {
         const result = await tx.person.updateMany({
             where: { id, ...recordWhere(context, false) },
-            data: { deletedAt: new Date() },
+            data: trashedNow(context, why),
         });
         if (result.count === 0) throw notFound();
         return { event: event(context, 'person.deleted', id) };
@@ -423,11 +439,11 @@ export class PeopleService implements BulkRecords {
         context: WorkspaceRunContext,
         id: string,
     ): Promise<{ row: PersonRow; event: DomainEvent }> {
-        const where = { id, ...recordWhere(context, true) };
+        const where = { id, ...recordWhere(context, true), mergedIntoId: null };
         const trashed = await tx.person.findFirst({ where, select: { emailPrimary: true } });
         if (!trashed) throw notFound();
         // A lead pool may have given the address to another workspace while this person was in the trash.
-        await tx.person.updateMany({ where, data: { deletedAt: null } }).catch(async (error: unknown) => {
+        await tx.person.updateMany({ where, data: RESTORED }).catch(async (error: unknown) => {
             throw uniqueViolation(error) ? await this.conflict(context, { primary: trashed.emailPrimary }, id) : error;
         });
         return { row: await find(tx, context, id), event: event(context, 'person.restored', id) };

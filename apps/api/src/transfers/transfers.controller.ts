@@ -3,7 +3,13 @@ import { ApiTags } from '@nestjs/swagger';
 import type { TransferPreviewView, TransferView } from '@bylinecrm/shared';
 import { AnyMember, Requires, TenantController } from '../auth/decorators';
 import { Returns } from '../openapi/responses';
-import { DecideTransferDto, ListTransfersQueryDto, PreviewTransferQueryDto, ProposeTransferDto } from './dto';
+import {
+    DecideTransferDto,
+    ListTransfersQueryDto,
+    PreviewTransferQueryDto,
+    ProposeTransferDto,
+    ReleaseRecordDto,
+} from './dto';
 import { transferPreviewView, transferView } from './responses';
 import { TransfersService } from './transfers.service';
 
@@ -41,6 +47,17 @@ export class TransfersController {
     @Returns(transferView)
     propose(@Body() body: ProposeTransferDto): Promise<TransferView> {
         return this.transfers.propose(body);
+    }
+
+    /**
+     * The owner gives the record up: it goes at once to the house account (Settings → Ownership), with what goes
+     * with it, for a manager to hand out again. Nobody is asked to accept; `422` while no house account is set.
+     */
+    @Requires('record:write')
+    @Post('release')
+    @Returns(transferView)
+    release(@Body() body: ReleaseRecordDto): Promise<TransferView> {
+        return this.transfers.release(body);
     }
 
     @AnyMember('the member a transfer is offered to accepts it')

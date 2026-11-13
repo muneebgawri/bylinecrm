@@ -245,6 +245,7 @@ describe('OWN-1 ownership transfers (FR-CRMS-17) and the manager role (FR-CRMS-1
         expect((await as(ana).get(w('/ownership/settings')).expect(200)).body).toEqual({
             transferCoolingDays: 14,
             dormantOwnerMonths: 6,
+            releaseToMemberId: null,
         });
         expect((await put(ana).send({ transferCoolingDays: 0, dormantOwnerMonths: 6 })).status).toBe(403);
         expect((await put(mia).send({ transferCoolingDays: 91, dormantOwnerMonths: 6 })).status).toBe(400);
@@ -398,6 +399,67 @@ describe('OWN-1 ownership transfers (FR-CRMS-17) and the manager role (FR-CRMS-1
                 true,
             );
         }
+    });
+
+    it('an owner releases a record to the house account: it moves at once with its unit, and nobody is asked', async () => {
+        const put = (who: Browser) =>
+            http().put(w('/ownership/settings')).set('Cookie', who.cookie).set(CSRF_HEADER, who.csrf);
+        const periods = { transferCoolingDays: 14, dormantOwnerMonths: 6 };
+        const members = (await as(admin).get(w('/members')).expect(200)).body as { id: string; email: string }[];
+        const miaId = members.find((m) => m.email === `own-mia-${stamp}@example.test`)!.id;
+        const firm = (
+            (
+                await as(ben)
+                    .post(w('/companies'))
+                    .send({ name: `Reyes ${stamp}`, domain: `reyes-${stamp}.test` })
+                    .expect(201)
+            ).body as { id: string }
+        ).id;
+        const lead = (
+            (
+                await as(ben)
+                    .post(w('/people'))
+                    .send({
+                        nameFirst: 'Rio',
+                        nameLast: 'Reyes',
+                        emails: { primary: `rio@reyes-${stamp}.test`, additional: [] },
+                        companyId: firm,
+                    })
+                    .expect(201)
+            ).body as { id: string }
+        ).id;
+        const release = (who: Browser) =>
+            as(who).post(w('/transfers/release')).send({ object: 'person', recordId: lead });
+
+        // No house account yet: there is nowhere to release to.
+        const none = await release(ben);
+        expect(none.status, JSON.stringify(none.body)).toBe(422);
+        // Only a manager names it, and only a member of the workspace.
+        expect((await put(ben).send({ ...periods, releaseToMemberId: miaId })).status).toBe(403);
+        expect((await put(mia).send({ ...periods, releaseToMemberId: workspace })).status).toBeGreaterThanOrEqual(400);
+        const set = await put(mia).send({ ...periods, releaseToMemberId: miaId });
+        expect(set.status, JSON.stringify(set.body)).toBe(200);
+        // Saving the periods alone leaves it as it is.
+        expect((await put(mia).send(periods).expect(200)).body).toEqual({ ...periods, releaseToMemberId: miaId });
+
+        // Not the owner: refused.
+        expect([403, 404]).toContain((await release(ana)).status);
+        const released = await release(ben);
+        expect(released.status, JSON.stringify(released.body)).toBe(201);
+        const t = released.body as TransferView;
+        expect(t).toMatchObject({ status: 'forced', reason: 'Released by its owner' });
+        expect(t.to.memberId).toBe(miaId);
+        expect(t.from?.memberId).toBe(benId);
+        // The person and the company the owner held move together.
+        expect(await ownerOf(`/people/${lead}`)).toBe(miaId);
+        expect(await ownerOf(`/companies/${firm}`)).toBe(miaId);
+        // The house account's bell is left alone.
+        expect((await inbox(mia)).items.some((n) => n.transfer?.id === t.id)).toBe(false);
+        // No longer the owner: a second release is refused.
+        expect([403, 404]).toContain((await release(ben)).status);
+        await put(mia)
+            .send({ ...periods, releaseToMemberId: null })
+            .expect(200);
     });
 
     it('announces transfers in the event catalogue, for webhooks and the NewswireOS adapter', () => {

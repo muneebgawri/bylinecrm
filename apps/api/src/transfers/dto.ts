@@ -14,6 +14,11 @@ export class ProposeTransferDto extends createZodDto(
     }),
 ) {}
 
+/** The owner gives a record up: it goes to the workspace's house account (Settings → Ownership) at once. */
+export class ReleaseRecordDto extends createZodDto(
+    z.object({ object: z.enum(RECORD_OBJECTS), recordId: z.uuid(), note: text.optional() }),
+) {}
+
 /** What a receiver says when declining, or anyone when cancelling. */
 export class DecideTransferDto extends createZodDto(z.object({ note: text.optional() })) {}
 
