@@ -33183,7 +33183,7 @@
                 "type": "object",
                 "properties": {
                     "since": {
-                        "default": "2023-04-01",
+                        "default": "2022-05-01",
                         "description": "The floor, `YYYY-MM-DD` (UTC); defaults to the product floor.",
                         "type": "string",
                         "format": "date",
