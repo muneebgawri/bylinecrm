@@ -5,7 +5,7 @@ import { ENV, type Env } from '../config/env';
 import { PrismaService } from '../infra/prisma.service';
 import { describe, RelayEngine, type ClaimedBase, type HandleResult, type SettleState } from '../infra/relay-engine';
 import { WorkspaceContext } from '../infra/workspace-context';
-import { OutboxConsumerOf, type OutboxConsumer } from './outbox-consumer';
+import { ConsumerContinues, OutboxConsumerOf, type OutboxConsumer } from './outbox-consumer';
 import {
     OUTBOX_BATCH,
     OUTBOX_CONCURRENCY,
@@ -122,10 +122,14 @@ export class OutboxRelay implements OnApplicationBootstrap, OnModuleDestroy {
         return { completed: done, failed };
     }
 
-    /** Hands one claimed event to every consumer still owed it. */
+    /**
+     * Hands one claimed event to every consumer still owed it. A consumer that continues (`ConsumerContinues`) has
+     * the event delivered again at once, attempt given back, unless another consumer failed — then it is the retry.
+     */
     private async deliver(row: ClaimedRow): Promise<HandleResult<DeliveryExtra>> {
         const done = new Set(row.completedConsumers);
         const errors: string[] = [];
+        const continuing: string[] = [];
         for (const { name, consumer } of this.consumers) {
             if (done.has(name) || !consumer.accepts(row.payload)) continue;
             try {
@@ -134,11 +138,13 @@ export class OutboxRelay implements OnApplicationBootstrap, OnModuleDestroy {
                 );
                 done.add(name);
             } catch (error) {
-                errors.push(`${name}: ${describe(error)}`);
+                (error instanceof ConsumerContinues ? continuing : errors).push(`${name}: ${describe(error)}`);
             }
         }
         const extra = { completedConsumers: [...done] };
-        return errors.length === 0 ? { ok: true, extra } : { ok: false, error: errors.join('; '), extra };
+        if (errors.length > 0) return { ok: false, error: [...errors, ...continuing].join('; '), extra };
+        if (continuing.length > 0) return { ok: false, error: continuing.join('; '), more: true, extra };
+        return { ok: true, extra };
     }
 
     /** Writes a delivery's outcome and the consumers that finished, and releases the claim. */
@@ -148,7 +154,9 @@ export class OutboxRelay implements OnApplicationBootstrap, OnModuleDestroy {
                 ? { completedAt: state.at, lastError: null }
                 : state.outcome === 'failed'
                   ? { failedAt: state.at, lastError: state.lastError }
-                  : { nextAttemptAt: state.nextAttemptAt, lastError: state.lastError };
+                  : state.outcome === 'continuing'
+                    ? { nextAttemptAt: null, lastError: state.progress, attempts: { decrement: 1 } }
+                    : { nextAttemptAt: state.nextAttemptAt, lastError: state.lastError };
         await this.ownerPrisma.outboxEvent.update({
             where: { id },
             data: { ...outcome, ...(extra ?? {}), leaseUntil: null },

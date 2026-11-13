@@ -7,6 +7,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest
 import { createApp } from '../../src/app';
 import { parseArgs, replayFailedEvents } from '../../src/cli/replay-failed-events';
 import { DomainEvents } from '../../src/events/domain-events.service';
+import { ConsumerContinues } from '../../src/events/outbox-consumer';
 import { OutboxRelay } from '../../src/events/outbox-relay.service';
 import {
     OUTBOX_LEASE_MS,
@@ -306,6 +307,38 @@ describe('P1-6 transactional outbox (#98)', () => {
         });
         expect(() => parseArgs(['acme'])).toThrow('usage');
         expect(() => parseArgs(['acme', '--type', 'x', '--since', 'yesterday'])).toThrow('usage');
+    });
+
+    it('#389: a consumer that continues has the event delivered again at once, with no attempt spent', async () => {
+        const writeFor = vi
+            .spyOn(app.get(TimelineService), 'writeFor')
+            .mockRejectedValueOnce(new ConsumerContinues('half of it done'));
+        const webhooks = vi.spyOn(app.get(WebhooksSubscriber), 'consume');
+        const person = await createPerson('Continued');
+        const event = await eventFor(person);
+
+        const now = Date.now();
+        await relay.runOnce(new Date(now));
+        const open = await owner.outboxEvent.findUniqueOrThrow({ where: { id: event.id } });
+        expect(open.completedAt).toBeNull();
+        expect(open.failedAt).toBeNull();
+        expect(open.attempts).toBe(0);
+        expect(open.nextAttemptAt).toBeNull();
+        expect(open.leaseUntil).toBeNull();
+        expect(open.lastError).toBe('timeline: half of it done');
+        expect(open.completedConsumers).toContain('webhooks');
+        expect(open.completedConsumers).not.toContain('timeline');
+
+        // Due at once: the very next scan delivers it, to the consumer that continued only.
+        const webhookCalls = webhooks.mock.calls.length;
+        await relay.runOnce(new Date(now));
+        const done = await owner.outboxEvent.findUniqueOrThrow({ where: { id: event.id } });
+        expect(done.completedAt).not.toBeNull();
+        expect(done.attempts).toBe(1);
+        expect(done.lastError).toBeNull();
+        expect(await entriesFor(person)).toBe(1);
+        expect(writeFor).toHaveBeenCalledTimes(2);
+        expect(webhooks.mock.calls.length).toBe(webhookCalls);
     });
 
     it('P1-6: retention removes delivered events past their days and keeps the rest', async () => {

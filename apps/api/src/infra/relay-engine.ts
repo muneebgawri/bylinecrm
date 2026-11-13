@@ -16,14 +16,20 @@ export interface ClaimedBase {
     attempts: number;
 }
 
-/** How a handler's work on one row went. It never throws: an unexpected throw counts as a failure. */
+/**
+ * How a handler's work on one row went. It never throws: an unexpected throw counts as a failure. `more` says the
+ * handler made progress it committed and has more to do (#389): the row is due again at once, and the delivery is not
+ * an attempt — a bounded handler finishes however many passes its row needs, and only a failure spends an attempt.
+ */
 export type HandleResult<Extra> =
-    { ok: true; extra?: Extra } | { ok: false; error: string; permanent?: boolean; extra?: Extra };
+    { ok: true; extra?: Extra } | { ok: false; error: string; permanent?: boolean; more?: boolean; extra?: Extra };
 
 /** What the engine writes back for one row, besides releasing the claim. */
 export type SettleState =
     | { outcome: 'completed'; at: Date }
     | { outcome: 'retrying'; nextAttemptAt: Date; lastError: string }
+    /** The handler continues on the next scan; `progress` is its note, and the claim's attempt is given back. */
+    | { outcome: 'continuing'; progress: string }
     | { outcome: 'failed'; at: Date; lastError: string };
 
 /** How one row's delivery went, for the relay's bookkeeping and the tests. */
@@ -68,7 +74,8 @@ export interface RelaySpec<Row extends ClaimedBase, Extra> {
  * `FOR UPDATE SKIP LOCKED`, sets a lease and counts the attempt, in one short statement. Claims never
  * overlap, so several processes may relay one table at once. Each claimed row is handed to the
  * spec's handler, `concurrency` at a time, with no transaction open; the outcome is written in one
- * statement: done, a retry after the spec's doubling wait, or — on a permanent failure or past
+ * statement: done, due again at once with its attempt given back (the handler committed progress
+ * and continues), a retry after the spec's doubling wait, or — on a permanent failure or past
  * `maxAttempts` — failed and kept for inspection. A relay that dies mid-delivery leaves its lease to
  * expire and the next scan claims the row again; handlers are idempotent on the row's id.
  *
@@ -211,6 +218,11 @@ export class RelayEngine<Row extends ClaimedBase, Extra = never> {
             return 'completed';
         }
         const label = this.spec.label(row);
+        if (result.more && !result.permanent) {
+            await this.spec.settle(row.id, { outcome: 'continuing', progress: result.error }, result.extra);
+            this.logger.log(`${label} continues on the next scan: ${result.error}`);
+            return 'continuing';
+        }
         if (result.permanent || row.attempts >= this.spec.maxAttempts) {
             await this.spec.settle(
                 row.id,
