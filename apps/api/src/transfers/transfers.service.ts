@@ -13,11 +13,11 @@ import type {
     TransferStatus,
     TransferView,
 } from '@bylinecrm/shared';
-import { TRANSFER_PREVIEW_NAMES } from '@bylinecrm/shared';
+import { TRANSFER_PREVIEW_NAMES, TRANSFER_REASON_RELEASED } from '@bylinecrm/shared';
 import type { Prisma } from '@prisma/client';
 import { DomainEvents } from '../events/domain-events.service';
 import { requireCallerMember } from '../infra/caller-member';
-import { UnknownReference } from '../infra/errors/api-errors';
+import { ApiException, UnknownReference } from '../infra/errors/api-errors';
 import { uniqueViolation } from '../infra/prisma-errors';
 import { RlsPrismaService, type WorkspaceClient } from '../infra/rls-prisma.service';
 import { WorkspaceContext, type WorkspaceRunContext } from '../infra/workspace-context';
@@ -144,6 +144,61 @@ export class TransfersService {
     }
 
     /**
+     * The owner gives the record up. It goes to the workspace's house account (`releaseToMemberId`, Settings →
+     * Ownership) at once, as a `forced` transfer the owner made: the unit an owner's hand-on moves, and the same
+     * announcements. The house account is not asked and its bell is left alone — it is where released records wait
+     * for a manager, not a member working them. `422` while no house account is set (or it has left).
+     */
+    async release(input: { object: RecordObject; recordId: string; note?: string | undefined }): Promise<TransferView> {
+        const context = this.current();
+        return this.rls.withWorkspace(async (tx) => {
+            const me = await requireCallerMember(tx, context);
+            const head = await findHead(tx, context, input.object, input.recordId);
+            if (!head) throw new NotFoundException('record not found');
+            if (head.ownerId !== me) throw new ForbiddenException('only the record’s owner may release it');
+            const settings = await tx.ownershipSettings.findFirst({ select: { releaseToMemberId: true } });
+            const to = settings?.releaseToMemberId
+                ? await tx.workspaceMember.findFirst({
+                      where: { id: settings.releaseToMemberId, leftAt: null },
+                      select: { id: true },
+                  })
+                : null;
+            if (!to) {
+                throw new ApiException(
+                    422,
+                    'unprocessable',
+                    'no account is set to receive released records: a manager sets one in Settings → Ownership',
+                    [{ path: 'recordId', message: 'NO_RELEASE_ACCOUNT' }],
+                );
+            }
+            if (to.id === me)
+                throw new ConflictException('released records come to you: there is nobody to release to');
+            const open = await tx.ownershipTransfer.findFirst({
+                where: { object: input.object, recordId: input.recordId, status: 'proposed' },
+                select: { id: true },
+            });
+            if (open) throw new ConflictException('this record is offered to someone: take the offer back first');
+            const row = await this.complete(tx, context, {
+                create: {
+                    object: input.object,
+                    recordId: input.recordId,
+                    fromMemberId: me,
+                    toMemberId: to.id,
+                    proposedByMemberId: me,
+                    decidedByMemberId: me,
+                    status: 'forced',
+                    reason: TRANSFER_REASON_RELEASED,
+                    note: input.note ?? null,
+                },
+                head,
+                me,
+                silent: true,
+            });
+            return view(row, await labelsFor(tx, row));
+        });
+    }
+
+    /**
      * OWN-1b: what a manager's move of the record to `toMemberId` would take, and from whom — the confirmation
      * before the move. Read past the caller's owner scope, as the move is.
      */
@@ -197,19 +252,40 @@ export class TransfersService {
         return this.rls.withWorkspace(async (tx) => ({
             transferCoolingDays: await coolingDays(tx),
             dormantOwnerMonths: await dormantOwnerMonths(tx),
+            releaseToMemberId:
+                (await tx.ownershipSettings.findFirst({ select: { releaseToMemberId: true } }))?.releaseToMemberId ??
+                null,
         }));
     }
 
-    setSettings(input: OwnershipSettingsView): Promise<OwnershipSettingsView> {
+    /** The two periods are replaced; `releaseToMemberId` changes only when named (null turns releasing off). */
+    setSettings(
+        input: Omit<OwnershipSettingsView, 'releaseToMemberId'> & { releaseToMemberId?: string | null | undefined },
+    ): Promise<OwnershipSettingsView> {
         const workspaceId = this.current().workspaceId;
-        const data = { transferCoolingDays: input.transferCoolingDays, dormantOwnerMonths: input.dormantOwnerMonths };
+        const data = {
+            transferCoolingDays: input.transferCoolingDays,
+            dormantOwnerMonths: input.dormantOwnerMonths,
+            ...(input.releaseToMemberId !== undefined ? { releaseToMemberId: input.releaseToMemberId } : {}),
+        };
         return this.rls.withWorkspace(async (tx) => {
+            if (input.releaseToMemberId) {
+                const member = await tx.workspaceMember.findFirst({
+                    where: { id: input.releaseToMemberId, leftAt: null },
+                    select: { id: true },
+                });
+                if (!member) throw new UnknownReference('releaseToMemberId', 'not a member of this workspace');
+            }
             const row = await tx.ownershipSettings.upsert({
                 where: { workspaceId },
                 create: { workspaceId, ...data },
                 update: data,
             });
-            return { transferCoolingDays: row.transferCoolingDays, dormantOwnerMonths: row.dormantOwnerMonths };
+            return {
+                transferCoolingDays: row.transferCoolingDays,
+                dormantOwnerMonths: row.dormantOwnerMonths,
+                releaseToMemberId: row.releaseToMemberId,
+            };
         });
     }
 

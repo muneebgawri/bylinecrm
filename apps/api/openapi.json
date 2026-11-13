@@ -10717,6 +10717,81 @@
                 "tags": ["transfers"]
             }
         },
+        "/api/w/{workspaceId}/transfers/release": {
+            "post": {
+                "operationId": "transfers_release",
+                "parameters": [
+                    {
+                        "name": "workspaceId",
+                        "required": true,
+                        "in": "path",
+                        "description": "The workspace",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ReleaseRecordDto"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Transfer"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "4XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "5XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    }
+                },
+                "tags": ["transfers"]
+            }
+        },
         "/api/w/{workspaceId}/transfers/{transferId}/accept": {
             "post": {
                 "operationId": "transfers_accept",
@@ -32088,6 +32163,13 @@
                         "minimum": 0,
                         "maximum": 36,
                         "description": "OWN-2f: months after which a company owner who has not worked it (no open deal, no mail, nothing saved or done there, no hand-over to them) holds it for nobody: its leads are anyone’s, and the next member to save a person there takes it over. 0 turns it off."
+                    },
+                    "releaseToMemberId": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                        "description": "The member a record goes to when its owner releases it (the house account). Null turns releasing off. Left out: unchanged.",
+                        "nullable": true
                     }
                 },
                 "required": ["transferCoolingDays", "dormantOwnerMonths"]
@@ -32395,6 +32477,26 @@
                     }
                 },
                 "required": ["object", "recordId", "toMemberId"]
+            },
+            "ReleaseRecordDto": {
+                "type": "object",
+                "properties": {
+                    "object": {
+                        "type": "string",
+                        "enum": ["person", "company", "opportunity"]
+                    },
+                    "recordId": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "note": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 500
+                    }
+                },
+                "required": ["object", "recordId"]
             },
             "DecideTransferDto": {
                 "type": "object",
@@ -39562,9 +39664,16 @@
                         "minimum": 0,
                         "maximum": 36,
                         "description": "OWN-2f: months after which a company owner who has not worked it (no open deal, no mail, nothing saved or done there, no hand-over to them) holds it for nobody: its leads are anyone’s, and the next member to save a person there takes it over. 0 turns it off."
+                    },
+                    "releaseToMemberId": {
+                        "nullable": true,
+                        "description": "The member a record goes to when its owner releases it (the house account). Null turns releasing off.",
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
                     }
                 },
-                "required": ["transferCoolingDays", "dormantOwnerMonths"]
+                "required": ["transferCoolingDays", "dormantOwnerMonths", "releaseToMemberId"]
             },
             "OwnershipResolution": {
                 "type": "object",
