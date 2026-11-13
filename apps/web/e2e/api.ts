@@ -45,6 +45,23 @@ const GETS: [RegExp, Handler][] = [
     [new RegExp(`^${W}/roles$`), () => data.roles],
     [new RegExp(`^${W}/api-keys$`), () => data.apiKeys],
     [new RegExp(`^${W}/invites$`), () => data.invites],
+    // Before the by-id routes: `deleted` is not an id.
+    [
+        new RegExp(`^${W}/people/deleted$`),
+        () =>
+            data.recordPage(
+                data.people.slice(0, 2).map((p, i) => ({
+                    ...p,
+                    deletion: {
+                        at: '2026-10-08T09:00:00.000Z',
+                        reason: i === 0 ? 'not_a_lead' : 'duplicate',
+                        note: i === 0 ? 'A personal address, not a customer.' : null,
+                        byMemberId: data.IDS.member,
+                    },
+                })),
+            ),
+    ],
+    [new RegExp(`^${W}/companies/deleted$`), () => data.recordPage([])],
     [new RegExp(`^${W}/people/${ID}$`), (m) => byId(data.people, m[1])],
     [new RegExp(`^${W}/people$`), () => data.recordPage(data.people)],
     [new RegExp(`^${W}/companies/${ID}$`), (m) => byId(data.companies, m[1])],

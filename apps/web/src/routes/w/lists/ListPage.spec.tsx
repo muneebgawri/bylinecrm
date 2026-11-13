@@ -328,11 +328,19 @@ describe('People list', () => {
         await user.click(screen.getByRole('checkbox', { name: 'Select Sam Okafor' }));
         await user.click(screen.getByRole('button', { name: 'Delete' }));
         const confirm = await screen.findByRole('dialog', { name: 'Delete 2 people?' });
+        // A delete says why: nothing is sent until a reason is chosen.
+        expect(within(confirm).getByRole('button', { name: 'Delete' })).toBeDisabled();
+        await user.click(within(confirm).getByRole('combobox', { name: 'Why' }));
+        await user.click(await screen.findByRole('option', { name: 'Not a lead' }));
         await user.click(within(confirm).getByRole('button', { name: 'Delete' }));
 
         await waitFor(() => expect(calls.some((c) => c.url.endsWith('/people/bulk'))).toBe(true));
         expect(calls.filter((c) => c.url.endsWith('/people/bulk'))).toEqual([
-            { method: 'POST', url: `/api/w/${WS}/people/bulk`, body: { action: 'delete', ids: ['p1', 'p2'] } },
+            {
+                method: 'POST',
+                url: `/api/w/${WS}/people/bulk`,
+                body: { action: 'delete', ids: ['p1', 'p2'], reason: 'not_a_lead' },
+            },
         ]);
         // One request, not one per person.
         expect(calls.filter((c) => c.method === 'DELETE')).toHaveLength(0);
