@@ -69,20 +69,31 @@ export async function heldOnlyByServiceInboxes(tx: WorkspaceClient, messageId: s
 const MATCHED_PERSON = Prisma.sql`CASE WHEN ${ON_RECORDS} THEN x.person_id ELSE NULL END`;
 
 /**
- * Re-points every participant with one of `addresses` at the person the address belongs to now
- * (or at no one). Returns the messages whose participants changed. Idempotent. Mail only service
- * inboxes hold is matched to no one (SVC-1).
+ * Re-points up to `limit` participants with one of `addresses` at the person the address belongs to now (or at no
+ * one). Returns the messages whose participants changed; an empty result means every participant already points
+ * right. Idempotent, and bounded (#389): a caller re-points an address with tens of thousands of participants a batch
+ * per transaction, calling again until nothing changes. Mail only service inboxes hold is matched to no one (SVC-1).
  */
-export async function rematchAddresses(tx: WorkspaceClient, addresses: readonly string[]): Promise<string[]> {
+export async function rematchAddresses(
+    tx: WorkspaceClient,
+    addresses: readonly string[],
+    limit: number,
+): Promise<string[]> {
     if (addresses.length === 0) return [];
     const rows = await tx.$queryRaw<{ message_id: string }[]>`
-        UPDATE mail_participants mp
-        SET person_id = ${MATCHED_PERSON}
-        FROM (
+        WITH owner AS (
             SELECT a.address, (${PERSON_FOR_ADDRESS}) AS person_id
             FROM unnest(${[...new Set(addresses)]}::text[]) AS a(address)
-        ) x
-        WHERE mp.address = x.address AND mp.person_id IS DISTINCT FROM ${MATCHED_PERSON}
+        ), due AS (
+            SELECT mp.id, x.person_id
+            FROM mail_participants mp JOIN owner x ON x.address = mp.address
+            WHERE mp.person_id IS DISTINCT FROM ${MATCHED_PERSON}
+            LIMIT ${limit}
+        )
+        UPDATE mail_participants mp
+        SET person_id = ${MATCHED_PERSON}
+        FROM due x
+        WHERE mp.id = x.id
         RETURNING mp.message_id`;
     return [...new Set(rows.map((r) => r.message_id))];
 }
