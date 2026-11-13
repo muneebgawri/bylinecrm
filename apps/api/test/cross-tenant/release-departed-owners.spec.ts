@@ -53,6 +53,8 @@ describe('release-departed-owners: a departed member’s records go to the compa
     let dealAlone: string;
     /** Ben's closed deal: history, it keeps its owner. */
     let closed: string;
+    /** Ben's company: once Ben has left, nobody active owns it. */
+    let bens: string;
 
     const as = (who: Browser) => ({
         get: (path: string) => http().get(path).set('Cookie', who.cookie),
@@ -103,7 +105,7 @@ describe('release-departed-owners: a departed member’s records go to the compa
                     .expect(201),
             );
         const admins = await company(admin, 'admins');
-        const bens = await company(ben, 'bens');
+        bens = await company(ben, 'bens');
         atAdmins = id(
             await as(ben)
                 .post(w('/people'))
@@ -155,6 +157,7 @@ describe('release-departed-owners: a departed member’s records go to the compa
             dealsToCompanyOwner: 1,
             dealsToContactOwner: 0,
             dealsReleased: 1,
+            dealsKept: 0,
             failed: 0,
         };
         expect(await run(false)).toEqual(expected);
@@ -173,6 +176,7 @@ describe('release-departed-owners: a departed member’s records go to the compa
             dealsToCompanyOwner: 0,
             dealsToContactOwner: 0,
             dealsReleased: 1,
+            dealsKept: 0,
             failed: 0,
         });
         expect(await personOwner(atAdmins)).toBe(adminId);
@@ -202,9 +206,45 @@ describe('release-departed-owners: a departed member’s records go to the compa
             dealsToCompanyOwner: 0,
             dealsToContactOwner: 0,
             dealsReleased: 0,
+            dealsKept: 0,
             failed: 0,
         };
         expect(await run(false)).toEqual(none);
         expect(await run(true)).toEqual(none);
+    });
+
+    it('--deals-of hands an active member’s open deals on by the same rule, keeping those it gives back', async () => {
+        // The admin's deal at a company nobody active owns, its contact nobody's: released. The admin's deal at their
+        // own company (moved with its contact above): the rule gives it back, so it is kept.
+        const orphan = id(
+            await as(admin)
+                .post(w('/opportunities'))
+                .send({ name: 'Orphan', currency: 'USD', companyId: bens, pointOfContactId: alone, ownerId: adminId })
+                .expect(201),
+        );
+        await owner.opportunity.update({ where: { id: orphan }, data: { ownerId: adminId } });
+        const of = (apply: boolean) => releaseDepartedOwners(app, workspace, { apply, dealsOf: adminId });
+        const expected = {
+            people: 0,
+            peopleToCompanyOwner: 0,
+            dealsWithPeople: 0,
+            peopleReleased: 0,
+            deals: 2,
+            dealsToCompanyOwner: 0,
+            dealsToContactOwner: 0,
+            dealsReleased: 1,
+            dealsKept: 1,
+            failed: 0,
+        };
+        expect(await of(false)).toEqual(expected);
+        expect(await dealOwner(orphan)).toBe(adminId);
+        expect(await of(true)).toEqual(expected);
+        expect(await dealOwner(orphan)).toBeNull();
+        expect(await dealOwner(dealAtAdmins)).toBe(adminId);
+        expect(await personOwner(atAdmins), 'people are not touched').toBe(adminId);
+        expect(await of(true)).toMatchObject({ deals: 1, dealsReleased: 0, dealsKept: 1 });
+        await expect(releaseDepartedOwners(app, workspace, { apply: false, dealsOf: benId })).rejects.toThrow(
+            'active member',
+        );
     });
 });
