@@ -763,42 +763,38 @@ function LeadsByOwnerCard({ workspaceId }: { workspaceId: string }) {
                     </LoadingRegion>
                 ) : (
                     <div className="max-h-[32rem] overflow-auto">
-                        <table className="w-full border-collapse text-sm">
-                            <thead className="sticky top-0 bg-surface text-[11px] font-medium tracking-wide text-text-muted uppercase">
-                                <tr>
-                                    <th className="px-6 py-2.5 text-left font-medium">Owner</th>
-                                    <th className="px-4 py-2.5 text-right font-medium">People</th>
-                                    <th className="px-4 py-2.5 text-right font-medium">Still new</th>
-                                    <th className="px-6 py-2.5 text-right font-medium">Open deals</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-border border-t border-border">
-                                {rows.map((r) => (
-                                    <tr key={r.member?.memberId ?? 'nobody'}>
-                                        <td className="px-6 py-2.5">
-                                            <span className="flex items-center gap-3">
-                                                {r.member ? (
-                                                    <Avatar name={r.member.name ?? 'Unnamed member'} size="sm" />
-                                                ) : null}
-                                                <span className={cn('truncate', !r.member && 'text-text-muted')}>
-                                                    {r.member ? (r.member.name ?? 'Unnamed member') : 'No owner'}
-                                                </span>
-                                                {r.member?.leftAt && <Badge status="warning">Left</Badge>}
+                        <div
+                            aria-hidden
+                            className="sticky top-0 grid grid-cols-[1fr_repeat(3,4.5rem)] gap-2 bg-surface px-6 py-2.5 text-[11px] font-medium tracking-wide text-text-muted uppercase sm:grid-cols-[1fr_repeat(3,6rem)]"
+                        >
+                            <span>Owner</span>
+                            <span className="text-right">People</span>
+                            <span className="text-right">Still new</span>
+                            <span className="text-right">Open deals</span>
+                        </div>
+                        <ul className="m-0 list-none divide-y divide-border border-t border-border p-0">
+                            {rows.map((r) => {
+                                const name = r.member ? (r.member.name ?? 'Unnamed member') : 'No owner';
+                                return (
+                                    <li
+                                        key={r.member?.memberId ?? 'nobody'}
+                                        aria-label={`${name}: ${r.people.toLocaleString()} people, ${r.newPeople.toLocaleString()} still new, ${r.openDeals.toLocaleString()} open deals`}
+                                        className="grid grid-cols-[1fr_repeat(3,4.5rem)] items-center gap-2 px-6 py-2.5 text-sm sm:grid-cols-[1fr_repeat(3,6rem)]"
+                                    >
+                                        <span className="flex min-w-0 items-center gap-3">
+                                            {r.member && <Avatar name={name} size="sm" className="max-sm:hidden" />}
+                                            <span className={cn('truncate', !r.member && 'text-text-muted')}>
+                                                {name}
                                             </span>
-                                        </td>
-                                        <td className="px-4 py-2.5 text-right tabular-nums">
-                                            {r.people.toLocaleString()}
-                                        </td>
-                                        <td className="px-4 py-2.5 text-right tabular-nums">
-                                            {r.newPeople.toLocaleString()}
-                                        </td>
-                                        <td className="px-6 py-2.5 text-right tabular-nums">
-                                            {r.openDeals.toLocaleString()}
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
+                                            {r.member?.leftAt && <Badge status="warning">Left</Badge>}
+                                        </span>
+                                        <span className="text-right tabular-nums">{r.people.toLocaleString()}</span>
+                                        <span className="text-right tabular-nums">{r.newPeople.toLocaleString()}</span>
+                                        <span className="text-right tabular-nums">{r.openDeals.toLocaleString()}</span>
+                                    </li>
+                                );
+                            })}
+                        </ul>
                     </div>
                 )}
             </CardContent>

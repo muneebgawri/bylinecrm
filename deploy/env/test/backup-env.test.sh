@@ -42,7 +42,9 @@ printf 'BYLINECRM_BACKUP_REMOTE=r2-bylinecrm:bylinecrm-backups/production\nBYLIN
 caller=$(
     # shellcheck source=../lib.sh
     . "$ENV_DIR/lib.sh"
-    BYLINECRM_RUNTIME="$RUNTIME" BYLINECRM_BACKUP_REMOTE="caller:wins" bylinecrm_env production
+    # Exported first: a prefix assignment to a function call does not outlive the call in every bash.
+    export BYLINECRM_BACKUP_REMOTE="caller:wins"
+    BYLINECRM_RUNTIME="$RUNTIME" bylinecrm_env production
     echo "$BYLINECRM_BACKUP_REMOTE|$BYLINECRM_RCLONE_CONF"
 )
 [ "$caller" = "caller:wins|/opt/bylinecrm-production-runtime/rclone.conf" ] || fail "a caller's remote should win over the file: $caller"
