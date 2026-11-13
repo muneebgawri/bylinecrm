@@ -240,6 +240,7 @@ describe('#192 task notifications: the bell, due reminders and the daily digest'
             notifyEmailReplies: true,
             notifyEmailClicks: true,
             notifyEmailOpens: true,
+            notifySound: true,
         });
     });
 

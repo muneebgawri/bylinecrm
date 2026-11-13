@@ -14,6 +14,7 @@ export class NotificationSettingsDto extends createZodDto(
             notifyEmailReplies: z.boolean(),
             notifyEmailClicks: z.boolean(),
             notifyEmailOpens: z.boolean(),
+            notifySound: z.boolean(),
         })
         .partial(),
 ) {}

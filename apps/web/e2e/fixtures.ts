@@ -764,6 +764,7 @@ export const notificationSettings: NotificationSettingsView = {
     notifyEmailReplies: true,
     notifyEmailClicks: true,
     notifyEmailOpens: true,
+    notifySound: true,
 };
 
 export const attachments: AttachmentView[] = [

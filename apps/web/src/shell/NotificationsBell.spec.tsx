@@ -3,7 +3,12 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { NotificationSettingsView, NotificationsView } from '../api/types';
 import { json, renderAt, route, stubApi } from '../routes/w/settings/settingsTestKit';
+import { createQueryClient } from '../api/queries';
+import { chime } from '../lib/chime';
 import { NotificationsBell } from './NotificationsBell';
+
+vi.mock('../lib/chime', () => ({ chime: vi.fn() }));
+import { canOpenTransferRecord } from './NotificationsPanel';
 
 const WS = 'ws-1';
 
@@ -12,6 +17,7 @@ const SETTINGS: NotificationSettingsView = {
     notifyEmailReplies: true,
     notifyEmailClicks: true,
     notifyEmailOpens: true,
+    notifySound: true,
 };
 
 const NONE = { task: null, transfer: null, guardrail: null, invoice: null, cadence: null, payment: null } as const;
@@ -200,6 +206,93 @@ describe('#192 the bell: a member’s task notifications', () => {
         await userEvent.click(within(panel).getByRole('link', { name: /Reply from Pat Prospect.*Re: Quick question/ }));
         expect(await screen.findByText('person page')).toBeInTheDocument();
         await waitFor(() => expect(seen.find((r) => r.method === 'POST')?.body).toEqual({ ids: ['e-1'] }));
+    });
+
+    it('answers an offer in the panel: the receiver cannot open a record that is not theirs yet', async () => {
+        const transfer = {
+            id: 'tr-1',
+            object: 'person',
+            recordId: 'p-9',
+            recordLabel: 'Pat Prospect',
+            from: { memberId: 'm-2', name: 'Ana' },
+            to: { memberId: 'm-1', name: 'Ben' },
+            status: 'proposed',
+            reason: null,
+        } as const;
+        const offered: NotificationsView = {
+            unread: 1,
+            items: [
+                {
+                    ...NONE,
+                    email: null,
+                    id: 'n-9',
+                    kind: 'transfer_proposed',
+                    target: { type: 'transfer', id: 'tr-1' },
+                    createdAt: '2026-11-13T09:00:00Z',
+                    readAt: null,
+                    transfer,
+                },
+            ],
+        };
+        const seen = stubApi([
+            (r) => (r.method === 'GET' && r.url.endsWith('/notifications') ? json(offered) : undefined),
+            (r) => (r.method === 'GET' && r.url.endsWith('/notification-settings') ? json(SETTINGS) : undefined),
+            (r) =>
+                r.method === 'POST' && r.url.endsWith('/transfers/tr-1/accept')
+                    ? json({ ...transfer, status: 'accepted' })
+                    : undefined,
+            (r) =>
+                r.method === 'POST' && r.url.endsWith('/notifications/read')
+                    ? new Response(null, { status: 204 })
+                    : undefined,
+        ]);
+        bell();
+        await userEvent.click(await screen.findByRole('button', { name: 'Notifications, 1 unread' }));
+        const panel = await screen.findByRole('dialog', { name: 'Notifications' });
+        expect(within(panel).getByText('Ana offers you Pat Prospect')).toBeInTheDocument();
+        // Waiting on them, it is answered here and is no link to a page they may not see.
+        expect(within(panel).queryByRole('link', { name: /Pat Prospect/ })).toBeNull();
+        expect(within(panel).getByRole('button', { name: 'Decline' })).toBeInTheDocument();
+        await userEvent.click(within(panel).getByRole('button', { name: 'Accept' }));
+        await waitFor(() => expect(seen.some((r) => r.url.endsWith('/transfers/tr-1/accept'))).toBe(true));
+        await waitFor(() =>
+            expect(seen.find((r) => r.url.endsWith('/notifications/read'))?.body).toEqual({ ids: ['n-9'] }),
+        );
+
+        // A member who keeps to their own records opens a transfer's record only while it is theirs.
+        const own = { memberId: 'm-1', recordScope: 'own' } as const;
+        expect(canOpenTransferRecord(transfer, own)).toBe(false);
+        expect(canOpenTransferRecord({ ...transfer, status: 'accepted' }, own)).toBe(true);
+        expect(canOpenTransferRecord({ ...transfer, status: 'accepted' }, { ...own, memberId: 'm-2' })).toBe(false);
+        expect(canOpenTransferRecord({ ...transfer, status: 'declined' }, { ...own, memberId: 'm-2' })).toBe(true);
+        expect(canOpenTransferRecord(transfer, { memberId: 'm-1', recordScope: 'all' })).toBe(true);
+    });
+
+    it('chimes and colours the bell when a notification arrives, not for what was already unread', async () => {
+        let unread = 1;
+        let sound = true;
+        stubApi([
+            (r) => (r.method === 'GET' && r.url.endsWith('/notifications') ? json({ unread, items: [] }) : undefined),
+            (r) =>
+                r.method === 'GET' && r.url.endsWith('/notification-settings')
+                    ? json({ ...SETTINGS, notifySound: sound })
+                    : undefined,
+        ]);
+        const client = createQueryClient();
+        renderAt([route('/w/:workspaceId/home', <NotificationsBell workspaceId={WS} />)], `/w/${WS}/home`, [], client);
+        const button = await screen.findByRole('button', { name: 'Notifications, 1 unread' });
+        expect(button).toHaveClass('text-info');
+        expect(chime).not.toHaveBeenCalled();
+        unread = 2;
+        await client.invalidateQueries();
+        await screen.findByRole('button', { name: 'Notifications, 2 unread' });
+        await waitFor(() => expect(chime).toHaveBeenCalledTimes(1));
+        // Turned off, the bell still tells by its colour, silently.
+        sound = false;
+        unread = 3;
+        await client.invalidateQueries();
+        await screen.findByRole('button', { name: 'Notifications, 3 unread' });
+        expect(chime).toHaveBeenCalledTimes(1);
     });
 
     it('turns email opens off, changing only that setting', async () => {

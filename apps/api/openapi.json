@@ -35003,6 +35003,9 @@
                     },
                     "notifyEmailOpens": {
                         "type": "boolean"
+                    },
+                    "notifySound": {
+                        "type": "boolean"
                     }
                 }
             },
@@ -44967,9 +44970,13 @@
                     "notifyEmailOpens": {
                         "type": "boolean",
                         "description": "The bell the first time an email you sent is opened. Approximate: mail apps preload images."
+                    },
+                    "notifySound": {
+                        "type": "boolean",
+                        "description": "A short sound in the app when a notification arrives."
                     }
                 },
-                "required": ["taskDigest", "notifyEmailReplies", "notifyEmailClicks", "notifyEmailOpens"]
+                "required": ["taskDigest", "notifyEmailReplies", "notifyEmailClicks", "notifyEmailOpens", "notifySound"]
             },
             "SequenceStep": {
                 "type": "object",
