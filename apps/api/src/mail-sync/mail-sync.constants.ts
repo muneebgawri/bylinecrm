@@ -31,6 +31,18 @@ export const MAIL_BACKFILL_JOBS_AT_ONCE = 2;
  */
 export const MAIL_BACKFILL_REFRESH_BATCH = 5;
 /**
+ * Participants a person change re-points per transaction (#389). A staff or system address can be on 10k–27k
+ * participant rows; re-pointing them all in one transaction ran past the 15 s and, retried, out of memory. Each batch
+ * is its own short transaction, and what it re-points is reconciled with it, so a killed run leaves the rest done.
+ */
+export const MAIL_REMATCH_BATCH = 200;
+/**
+ * How long one delivery of a person change keeps re-matching before it hands the rest to the next delivery: a third
+ * of the outbox lease (`OUTBOX_LEASE_MS`, 60 s), so one person with a huge mailbox never holds the relay's slot past
+ * its claim, and the other events keep flowing between its passes.
+ */
+export const MAIL_REMATCH_BUDGET_MS = 20_000;
+/**
  * Added to a stored message's own bytes (bodies, subject, snippet; uncompressed) for its participants, its copy, its
  * thread rows and their index entries, when the budget counts what the backfill wrote: an over-estimate on purpose.
  */

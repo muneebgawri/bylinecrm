@@ -6,7 +6,7 @@ import { Test } from '@nestjs/testing';
 import { CSRF_COOKIE, CSRF_HEADER, GMAIL_SCOPES, SESSION_COOKIE, SYSTEM_ROLES } from '@bylinecrm/shared';
 import type { Queue } from 'bullmq';
 import request, { type Response } from 'supertest';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { APP_OPTIONS, configureApp } from '../../src/app';
 import { AppModule } from '../../src/app.module';
 import { PrismaService } from '../../src/infra/prisma.service';
@@ -15,7 +15,7 @@ import { RlsPrismaService } from '../../src/infra/rls-prisma.service';
 import { GOOGLE_OAUTH_PORT } from '../../src/mail-accounts/google-oauth.port';
 import { MAIL_OAUTH_CALLBACK_PATH } from '../../src/mail-accounts/mail-accounts.constants';
 import { GMAIL_PORT } from '../../src/mail-sync/gmail.port';
-import { MAIL_SYNC_QUEUE } from '../../src/mail-sync/mail-sync.constants';
+import { MAIL_REMATCH_BATCH, MAIL_SYNC_QUEUE } from '../../src/mail-sync/mail-sync.constants';
 import { MailSyncService, type SyncRunResult } from '../../src/mail-sync/mail-sync.service';
 import { recountThread } from '../../src/mail-sync/threads';
 import { FakeGmail } from '../support/fake-gmail';
@@ -687,6 +687,53 @@ describe('mail sync', () => {
             expect(
                 (await emailEvents()).filter((e) => e.type === 'email.linked' && e.recordId === messageId),
             ).toHaveLength(2);
+        });
+
+        it('#389: a person on more mail than one batch is re-pointed in full, a batch per transaction', async () => {
+            // More participants than one batch re-points, stored as a sync would store them: on Kai.
+            const extra = MAIL_REMATCH_BATCH * 2 + 7;
+            const thread = await owner.mailThread.create({
+                data: { workspaceId: workspace, subject: 'Bulk', lastMessageAt: new Date() },
+                select: { id: true },
+            });
+            await owner.mailMessage.createMany({
+                data: Array.from({ length: extra }, (_, i) => ({
+                    workspaceId: workspace,
+                    threadId: thread.id,
+                    identityKey: `bulk-${stamp}-${i}`,
+                    direction: 'inbound' as const,
+                    fromAddress: kai,
+                    sentAt: new Date(Date.now() - i * 1000),
+                    subject: `Bulk ${i}`,
+                })),
+            });
+            const bulk = await owner.mailMessage.findMany({
+                where: { threadId: thread.id },
+                select: { id: true },
+            });
+            await owner.mailParticipant.createMany({
+                data: bulk.map((m) => ({
+                    workspaceId: workspace,
+                    messageId: m.id,
+                    role: 'from' as const,
+                    address: kai,
+                    personId: kaiId,
+                })),
+            });
+            const onKai = () => owner.mailParticipant.count({ where: { address: kai, personId: kaiId } });
+            expect(await onKai()).toBe(extra + 1);
+
+            const transactions = vi.spyOn(app.get(RlsPrismaService), 'withWorkspace');
+            await as(admin).delete(w(`/people/${kaiId}`));
+            expect(await settled(onKai)).toBe(0);
+            // At least one transaction per full batch, plus the one that found nothing left.
+            expect(transactions.mock.calls.length).toBeGreaterThanOrEqual(
+                Math.ceil((extra + 1) / MAIL_REMATCH_BATCH) + 1,
+            );
+            transactions.mockRestore();
+            for (const target of [kaiId, laterCo, laterDeal]) {
+                expect(await emailEntriesOn(target)).toBe(0);
+            }
         });
     });
 
