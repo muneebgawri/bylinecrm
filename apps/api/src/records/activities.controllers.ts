@@ -1,6 +1,6 @@
 import { Body, Delete, Get, Header, HttpCode, Param, ParseUUIDPipe, Patch, Post, Query, Res } from '@nestjs/common';
 import type { Response } from 'express';
-import type { BulkResult } from '@bylinecrm/shared';
+import type { BulkResult, Trashed } from '@bylinecrm/shared';
 import { BulkBodyDto, ExportBodyDto, ExportQueryDto, GroupByQueryDto, QueryBodyDto } from '../query/dto';
 import { ExportService } from '../query/export.service';
 import type { Group } from '../query/group-by';
@@ -13,6 +13,7 @@ import {
     CreateOpportunityDto,
     CreateTaskDto,
     ListNotesQueryDto,
+    DeleteRecordQueryDto,
     ListQueryDto,
     ListTasksQueryDto,
     UpdateNoteDto,
@@ -27,7 +28,16 @@ import { parseTarget } from './targets';
 import { TasksService, type TaskView } from './tasks.service';
 import { Returns, ReturnsFile } from '../openapi/responses';
 import { groupView } from '../query/responses';
-import { bulkResultView, notePage, noteView, opportunityPage, opportunityView, taskPage, taskView } from './responses';
+import {
+    bulkResultView,
+    notePage,
+    noteView,
+    opportunityPage,
+    opportunityView,
+    taskPage,
+    taskView,
+    trashedOpportunityPage,
+} from './responses';
 
 /**
  * Deals: read with `deal:read`, every write with `deal:edit`; moving stages is P1-2's `deal:move`;
@@ -108,9 +118,9 @@ export class OpportunitiesController {
 
     @Requires('deal:edit')
     @Get('deleted')
-    @Returns(opportunityPage)
-    listDeleted(@Query() query: ListQueryDto): Promise<CountedPage<OpportunityView>> {
-        return this.opportunities.list(query, true);
+    @Returns(trashedOpportunityPage)
+    listDeleted(@Query() query: ListQueryDto): Promise<CountedPage<Trashed<OpportunityView>>> {
+        return this.opportunities.listDeleted(query);
     }
 
     @Requires('deal:read')
@@ -140,8 +150,11 @@ export class OpportunitiesController {
     @Requires('deal:edit')
     @HttpCode(204)
     @Delete(':opportunityId')
-    remove(@Param('opportunityId', ParseUUIDPipe) opportunityId: string): Promise<void> {
-        return this.opportunities.remove(opportunityId);
+    remove(
+        @Param('opportunityId', ParseUUIDPipe) opportunityId: string,
+        @Query() why: DeleteRecordQueryDto,
+    ): Promise<void> {
+        return this.opportunities.remove(opportunityId, why);
     }
 
     @Requires('deal:edit')

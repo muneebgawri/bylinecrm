@@ -3717,7 +3717,7 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/PersonPage"
+                                    "$ref": "#/components/schemas/TrashedPersonPage"
                                 }
                             }
                         },
@@ -3998,6 +3998,25 @@
                         "required": true,
                         "in": "path",
                         "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "reason",
+                        "required": false,
+                        "in": "query",
+                        "schema": {
+                            "type": "string",
+                            "enum": ["not_a_lead", "duplicate", "wrong_details", "other"]
+                        }
+                    },
+                    {
+                        "name": "note",
+                        "required": false,
+                        "in": "query",
+                        "schema": {
+                            "minLength": 1,
+                            "maxLength": 500,
                             "type": "string"
                         }
                     },
@@ -4859,7 +4878,7 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/CompanyPage"
+                                    "$ref": "#/components/schemas/TrashedCompanyPage"
                                 }
                             }
                         },
@@ -5064,6 +5083,25 @@
                         "required": true,
                         "in": "path",
                         "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "reason",
+                        "required": false,
+                        "in": "query",
+                        "schema": {
+                            "type": "string",
+                            "enum": ["not_a_lead", "duplicate", "wrong_details", "other"]
+                        }
+                    },
+                    {
+                        "name": "note",
+                        "required": false,
+                        "in": "query",
+                        "schema": {
+                            "minLength": 1,
+                            "maxLength": 500,
                             "type": "string"
                         }
                     },
@@ -6304,7 +6342,7 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/OpportunityPage"
+                                    "$ref": "#/components/schemas/TrashedOpportunityPage"
                                 }
                             }
                         },
@@ -6509,6 +6547,25 @@
                         "required": true,
                         "in": "path",
                         "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "reason",
+                        "required": false,
+                        "in": "query",
+                        "schema": {
+                            "type": "string",
+                            "enum": ["not_a_lead", "duplicate", "wrong_details", "other"]
+                        }
+                    },
+                    {
+                        "name": "note",
+                        "required": false,
+                        "in": "query",
+                        "schema": {
+                            "minLength": 1,
+                            "maxLength": 500,
                             "type": "string"
                         }
                     },
@@ -30770,6 +30827,17 @@
                         "format": "uuid",
                         "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
                         "nullable": true
+                    },
+                    "reason": {
+                        "description": "`delete` only: why.",
+                        "type": "string",
+                        "enum": ["not_a_lead", "duplicate", "wrong_details", "other"]
+                    },
+                    "note": {
+                        "description": "`delete` only.",
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 500
                     }
                 },
                 "required": ["action"]
@@ -38087,6 +38155,243 @@
                 },
                 "required": ["items", "nextCursor", "total", "totalIsExact"]
             },
+            "TrashedPersonPage": {
+                "type": "object",
+                "properties": {
+                    "items": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "id": {
+                                    "type": "string",
+                                    "format": "uuid",
+                                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                                    "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
+                                },
+                                "nameFirst": {
+                                    "type": "string"
+                                },
+                                "nameLast": {
+                                    "type": "string"
+                                },
+                                "emails": {
+                                    "$ref": "#/components/schemas/Emails"
+                                },
+                                "phones": {
+                                    "$ref": "#/components/schemas/Phones"
+                                },
+                                "jobTitle": {
+                                    "nullable": true,
+                                    "type": "string"
+                                },
+                                "city": {
+                                    "nullable": true,
+                                    "type": "string"
+                                },
+                                "source": {
+                                    "nullable": true,
+                                    "type": "string"
+                                },
+                                "country": {
+                                    "nullable": true,
+                                    "type": "string"
+                                },
+                                "contactStatus": {
+                                    "type": "string",
+                                    "enum": [
+                                        "new",
+                                        "attempted_contact",
+                                        "contacted",
+                                        "engaged",
+                                        "unresponsive",
+                                        "do_not_contact",
+                                        "customer"
+                                    ],
+                                    "description": "Derived (#242) from mail sent and received, meetings, won deals and the suppression list, unless `contactStatusOverride` is set; `do_not_contact` whenever the primary address is suppressed."
+                                },
+                                "contactStatusOverride": {
+                                    "nullable": true,
+                                    "description": "A member’s choice, which outranks everything but `do_not_contact`.",
+                                    "type": "string",
+                                    "enum": [
+                                        "new",
+                                        "attempted_contact",
+                                        "contacted",
+                                        "engaged",
+                                        "unresponsive",
+                                        "do_not_contact",
+                                        "customer"
+                                    ]
+                                },
+                                "contactAttempts": {
+                                    "type": "integer",
+                                    "minimum": -9007199254740991,
+                                    "maximum": 9007199254740991,
+                                    "description": "Derived: emails sent to them, from a connected mailbox or imported."
+                                },
+                                "lastContactedAt": {
+                                    "nullable": true,
+                                    "description": "Derived: when the last message was sent to them.",
+                                    "example": "2026-10-09T09:30:00.000Z",
+                                    "type": "string",
+                                    "format": "date-time",
+                                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                                },
+                                "cadenceOverdue": {
+                                    "type": "boolean",
+                                    "description": "Derived (CADENCE-1): the point of contact of an open deal whose follow-up cadence lapsed."
+                                },
+                                "newswireosCustomerId": {
+                                    "nullable": true,
+                                    "description": "Read-only (PNW-766): their NewswireOS client, from its answer to the latest won-deal push.",
+                                    "type": "string"
+                                },
+                                "links": {
+                                    "$ref": "#/components/schemas/Links"
+                                },
+                                "avatarUrl": {
+                                    "nullable": true,
+                                    "type": "string"
+                                },
+                                "position": {
+                                    "type": "number"
+                                },
+                                "companyId": {
+                                    "nullable": true,
+                                    "type": "string",
+                                    "format": "uuid",
+                                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                                    "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
+                                },
+                                "ownerId": {
+                                    "nullable": true,
+                                    "type": "string",
+                                    "format": "uuid",
+                                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                                    "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
+                                },
+                                "company": {
+                                    "nullable": true,
+                                    "description": "The company, by name; null when none, trashed or not visible to the caller.",
+                                    "allOf": [
+                                        {
+                                            "$ref": "#/components/schemas/RecordSummary"
+                                        }
+                                    ]
+                                },
+                                "owner": {
+                                    "nullable": true,
+                                    "description": "The owner, by name; null when the record has none.",
+                                    "allOf": [
+                                        {
+                                            "$ref": "#/components/schemas/MemberSummary"
+                                        }
+                                    ]
+                                },
+                                "createdBy": {
+                                    "$ref": "#/components/schemas/Actor"
+                                },
+                                "custom": {
+                                    "type": "object",
+                                    "additionalProperties": {}
+                                },
+                                "deletedAt": {
+                                    "nullable": true,
+                                    "example": "2026-10-09T09:30:00.000Z",
+                                    "type": "string",
+                                    "format": "date-time",
+                                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                                },
+                                "createdAt": {
+                                    "example": "2026-10-09T09:30:00.000Z",
+                                    "type": "string",
+                                    "format": "date-time",
+                                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                                },
+                                "updatedAt": {
+                                    "example": "2026-10-09T09:30:00.000Z",
+                                    "type": "string",
+                                    "format": "date-time",
+                                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                                },
+                                "deletion": {
+                                    "type": "object",
+                                    "properties": {
+                                        "at": {
+                                            "type": "string",
+                                            "format": "date-time",
+                                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                                        },
+                                        "reason": {
+                                            "nullable": true,
+                                            "description": "Why, as whoever deleted it said; null when unsaid.",
+                                            "type": "string",
+                                            "enum": ["not_a_lead", "duplicate", "wrong_details", "other"]
+                                        },
+                                        "note": {
+                                            "nullable": true,
+                                            "type": "string"
+                                        },
+                                        "byMemberId": {
+                                            "nullable": true,
+                                            "description": "The member who deleted it; null for an API key or a job.",
+                                            "type": "string",
+                                            "format": "uuid",
+                                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                                        }
+                                    },
+                                    "required": ["at", "reason", "note", "byMemberId"]
+                                }
+                            },
+                            "required": [
+                                "id",
+                                "nameFirst",
+                                "nameLast",
+                                "emails",
+                                "phones",
+                                "jobTitle",
+                                "city",
+                                "source",
+                                "country",
+                                "contactStatus",
+                                "contactStatusOverride",
+                                "contactAttempts",
+                                "lastContactedAt",
+                                "cadenceOverdue",
+                                "newswireosCustomerId",
+                                "links",
+                                "avatarUrl",
+                                "position",
+                                "companyId",
+                                "ownerId",
+                                "company",
+                                "owner",
+                                "createdBy",
+                                "custom",
+                                "deletedAt",
+                                "createdAt",
+                                "updatedAt",
+                                "deletion"
+                            ]
+                        }
+                    },
+                    "nextCursor": {
+                        "nullable": true,
+                        "type": "string"
+                    },
+                    "total": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991,
+                        "description": "Rows in the whole filtered, scoped set (capped; see totalIsExact)."
+                    },
+                    "totalIsExact": {
+                        "type": "boolean"
+                    }
+                },
+                "required": ["items", "nextCursor", "total", "totalIsExact"]
+            },
             "PersonCreated": {
                 "type": "object",
                 "properties": {
@@ -38423,6 +38728,172 @@
                 },
                 "required": ["items", "nextCursor", "total", "totalIsExact"]
             },
+            "TrashedCompanyPage": {
+                "type": "object",
+                "properties": {
+                    "items": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "id": {
+                                    "type": "string",
+                                    "format": "uuid",
+                                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                                    "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
+                                },
+                                "name": {
+                                    "type": "string"
+                                },
+                                "domain": {
+                                    "nullable": true,
+                                    "type": "string"
+                                },
+                                "logoUrl": {
+                                    "nullable": true,
+                                    "type": "string"
+                                },
+                                "employeeCount": {
+                                    "nullable": true,
+                                    "type": "integer",
+                                    "minimum": -9007199254740991,
+                                    "maximum": 9007199254740991
+                                },
+                                "arr": {
+                                    "nullable": true,
+                                    "allOf": [
+                                        {
+                                            "$ref": "#/components/schemas/Money"
+                                        }
+                                    ]
+                                },
+                                "address": {
+                                    "$ref": "#/components/schemas/Address"
+                                },
+                                "links": {
+                                    "$ref": "#/components/schemas/Links"
+                                },
+                                "icp": {
+                                    "type": "boolean"
+                                },
+                                "newswireosCustomerId": {
+                                    "nullable": true,
+                                    "description": "Read-only (PNW-766): its NewswireOS client, the first a won-deal push gave it.",
+                                    "type": "string"
+                                },
+                                "position": {
+                                    "type": "number"
+                                },
+                                "ownerId": {
+                                    "nullable": true,
+                                    "type": "string",
+                                    "format": "uuid",
+                                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                                    "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
+                                },
+                                "owner": {
+                                    "nullable": true,
+                                    "description": "The owner, by name; null when the record has none.",
+                                    "allOf": [
+                                        {
+                                            "$ref": "#/components/schemas/MemberSummary"
+                                        }
+                                    ]
+                                },
+                                "createdBy": {
+                                    "$ref": "#/components/schemas/Actor"
+                                },
+                                "custom": {
+                                    "type": "object",
+                                    "additionalProperties": {}
+                                },
+                                "deletedAt": {
+                                    "nullable": true,
+                                    "example": "2026-10-09T09:30:00.000Z",
+                                    "type": "string",
+                                    "format": "date-time",
+                                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                                },
+                                "createdAt": {
+                                    "example": "2026-10-09T09:30:00.000Z",
+                                    "type": "string",
+                                    "format": "date-time",
+                                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                                },
+                                "updatedAt": {
+                                    "example": "2026-10-09T09:30:00.000Z",
+                                    "type": "string",
+                                    "format": "date-time",
+                                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                                },
+                                "deletion": {
+                                    "type": "object",
+                                    "properties": {
+                                        "at": {
+                                            "type": "string",
+                                            "format": "date-time",
+                                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                                        },
+                                        "reason": {
+                                            "nullable": true,
+                                            "description": "Why, as whoever deleted it said; null when unsaid.",
+                                            "type": "string",
+                                            "enum": ["not_a_lead", "duplicate", "wrong_details", "other"]
+                                        },
+                                        "note": {
+                                            "nullable": true,
+                                            "type": "string"
+                                        },
+                                        "byMemberId": {
+                                            "nullable": true,
+                                            "description": "The member who deleted it; null for an API key or a job.",
+                                            "type": "string",
+                                            "format": "uuid",
+                                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                                        }
+                                    },
+                                    "required": ["at", "reason", "note", "byMemberId"]
+                                }
+                            },
+                            "required": [
+                                "id",
+                                "name",
+                                "domain",
+                                "logoUrl",
+                                "employeeCount",
+                                "arr",
+                                "address",
+                                "links",
+                                "icp",
+                                "newswireosCustomerId",
+                                "position",
+                                "ownerId",
+                                "owner",
+                                "createdBy",
+                                "custom",
+                                "deletedAt",
+                                "createdAt",
+                                "updatedAt",
+                                "deletion"
+                            ]
+                        }
+                    },
+                    "nextCursor": {
+                        "nullable": true,
+                        "type": "string"
+                    },
+                    "total": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991,
+                        "description": "Rows in the whole filtered, scoped set (capped; see totalIsExact)."
+                    },
+                    "totalIsExact": {
+                        "type": "boolean"
+                    }
+                },
+                "required": ["items", "nextCursor", "total", "totalIsExact"]
+            },
             "Opportunity": {
                 "type": "object",
                 "properties": {
@@ -38682,6 +39153,309 @@
                         "type": "array",
                         "items": {
                             "$ref": "#/components/schemas/Opportunity"
+                        }
+                    },
+                    "nextCursor": {
+                        "nullable": true,
+                        "type": "string"
+                    },
+                    "total": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991,
+                        "description": "Rows in the whole filtered, scoped set (capped; see totalIsExact)."
+                    },
+                    "totalIsExact": {
+                        "type": "boolean"
+                    }
+                },
+                "required": ["items", "nextCursor", "total", "totalIsExact"]
+            },
+            "TrashedOpportunityPage": {
+                "type": "object",
+                "properties": {
+                    "items": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "id": {
+                                    "type": "string",
+                                    "format": "uuid",
+                                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                                    "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
+                                },
+                                "name": {
+                                    "type": "string"
+                                },
+                                "pipelineId": {
+                                    "type": "string",
+                                    "format": "uuid",
+                                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                                    "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
+                                },
+                                "stageId": {
+                                    "type": "string",
+                                    "format": "uuid",
+                                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                                    "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
+                                },
+                                "stageEnteredAt": {
+                                    "example": "2026-10-09T09:30:00.000Z",
+                                    "description": "When the deal entered its current stage.",
+                                    "type": "string",
+                                    "format": "date-time",
+                                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                                },
+                                "daysInStage": {
+                                    "type": "integer",
+                                    "minimum": -9007199254740991,
+                                    "maximum": 9007199254740991,
+                                    "description": "Whole days since `stageEnteredAt`, at read time."
+                                },
+                                "closedAt": {
+                                    "nullable": true,
+                                    "example": "2026-10-09T09:30:00.000Z",
+                                    "type": "string",
+                                    "format": "date-time",
+                                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                                },
+                                "lostReason": {
+                                    "nullable": true,
+                                    "description": "Free text beside `lostReasonCode`, when given.",
+                                    "type": "string"
+                                },
+                                "lostReasonCode": {
+                                    "nullable": true,
+                                    "description": "Why the deal was lost (#242): set on every close into a lost stage.",
+                                    "type": "string",
+                                    "enum": [
+                                        "price_budget",
+                                        "no_response",
+                                        "chose_competitor",
+                                        "not_ready",
+                                        "service_not_suitable",
+                                        "timing",
+                                        "duplicate_opportunity",
+                                        "other"
+                                    ]
+                                },
+                                "nextFollowUpDate": {
+                                    "nullable": true,
+                                    "description": "A calendar date, `YYYY-MM-DD`; keeps one open follow-up task due that day.",
+                                    "type": "string"
+                                },
+                                "followUpTaskId": {
+                                    "nullable": true,
+                                    "description": "The follow-up task `nextFollowUpDate` keeps, when any.",
+                                    "type": "string",
+                                    "format": "uuid",
+                                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                                    "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
+                                },
+                                "nextActivity": {
+                                    "nullable": true,
+                                    "type": "string"
+                                },
+                                "serviceInterest": {
+                                    "nullable": true,
+                                    "description": "The package or service the deal is about.",
+                                    "type": "string"
+                                },
+                                "leadSource": {
+                                    "nullable": true,
+                                    "type": "string"
+                                },
+                                "lastContactedAt": {
+                                    "nullable": true,
+                                    "description": "Derived: when an email was last sent to the point of contact.",
+                                    "example": "2026-10-09T09:30:00.000Z",
+                                    "type": "string",
+                                    "format": "date-time",
+                                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                                },
+                                "contactAttempts": {
+                                    "type": "integer",
+                                    "minimum": -9007199254740991,
+                                    "maximum": 9007199254740991,
+                                    "description": "Derived: emails sent to the point of contact (synced or imported); 0 when the deal has none."
+                                },
+                                "cadenceDueAt": {
+                                    "nullable": true,
+                                    "description": "Derived (CADENCE-1): when the next touch is due under its stage’s cadence; null when no cadence applies (closed, unowned, a customer, excluded or suppressed contact).",
+                                    "example": "2026-10-09T09:30:00.000Z",
+                                    "type": "string",
+                                    "format": "date-time",
+                                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                                },
+                                "cadenceOverdue": {
+                                    "type": "boolean",
+                                    "description": "Derived (CADENCE-1): the cadence lapsed."
+                                },
+                                "amount": {
+                                    "nullable": true,
+                                    "allOf": [
+                                        {
+                                            "$ref": "#/components/schemas/Money"
+                                        }
+                                    ]
+                                },
+                                "currency": {
+                                    "type": "string"
+                                },
+                                "closeDate": {
+                                    "nullable": true,
+                                    "description": "A calendar date, `YYYY-MM-DD`.",
+                                    "example": "2026-10-31",
+                                    "type": "string"
+                                },
+                                "probability": {
+                                    "nullable": true,
+                                    "type": "number"
+                                },
+                                "position": {
+                                    "type": "number"
+                                },
+                                "ownerId": {
+                                    "nullable": true,
+                                    "type": "string",
+                                    "format": "uuid",
+                                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                                    "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
+                                },
+                                "pointOfContactId": {
+                                    "nullable": true,
+                                    "type": "string",
+                                    "format": "uuid",
+                                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                                    "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
+                                },
+                                "companyId": {
+                                    "nullable": true,
+                                    "type": "string",
+                                    "format": "uuid",
+                                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                                    "example": "0190a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b"
+                                },
+                                "owner": {
+                                    "nullable": true,
+                                    "description": "The owner, by name; null when the record has none.",
+                                    "allOf": [
+                                        {
+                                            "$ref": "#/components/schemas/MemberSummary"
+                                        }
+                                    ]
+                                },
+                                "pointOfContact": {
+                                    "nullable": true,
+                                    "description": "The point of contact, by name; null when none, trashed or not visible to the caller.",
+                                    "allOf": [
+                                        {
+                                            "$ref": "#/components/schemas/RecordSummary"
+                                        }
+                                    ]
+                                },
+                                "company": {
+                                    "nullable": true,
+                                    "description": "The company, by name; null when none, trashed or not visible to the caller.",
+                                    "allOf": [
+                                        {
+                                            "$ref": "#/components/schemas/RecordSummary"
+                                        }
+                                    ]
+                                },
+                                "createdBy": {
+                                    "$ref": "#/components/schemas/Actor"
+                                },
+                                "custom": {
+                                    "type": "object",
+                                    "additionalProperties": {}
+                                },
+                                "deletedAt": {
+                                    "nullable": true,
+                                    "example": "2026-10-09T09:30:00.000Z",
+                                    "type": "string",
+                                    "format": "date-time",
+                                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                                },
+                                "createdAt": {
+                                    "example": "2026-10-09T09:30:00.000Z",
+                                    "type": "string",
+                                    "format": "date-time",
+                                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                                },
+                                "updatedAt": {
+                                    "example": "2026-10-09T09:30:00.000Z",
+                                    "type": "string",
+                                    "format": "date-time",
+                                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                                },
+                                "deletion": {
+                                    "type": "object",
+                                    "properties": {
+                                        "at": {
+                                            "type": "string",
+                                            "format": "date-time",
+                                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                                        },
+                                        "reason": {
+                                            "nullable": true,
+                                            "description": "Why, as whoever deleted it said; null when unsaid.",
+                                            "type": "string",
+                                            "enum": ["not_a_lead", "duplicate", "wrong_details", "other"]
+                                        },
+                                        "note": {
+                                            "nullable": true,
+                                            "type": "string"
+                                        },
+                                        "byMemberId": {
+                                            "nullable": true,
+                                            "description": "The member who deleted it; null for an API key or a job.",
+                                            "type": "string",
+                                            "format": "uuid",
+                                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                                        }
+                                    },
+                                    "required": ["at", "reason", "note", "byMemberId"]
+                                }
+                            },
+                            "required": [
+                                "id",
+                                "name",
+                                "pipelineId",
+                                "stageId",
+                                "stageEnteredAt",
+                                "daysInStage",
+                                "closedAt",
+                                "lostReason",
+                                "lostReasonCode",
+                                "nextFollowUpDate",
+                                "followUpTaskId",
+                                "nextActivity",
+                                "serviceInterest",
+                                "leadSource",
+                                "lastContactedAt",
+                                "contactAttempts",
+                                "cadenceDueAt",
+                                "cadenceOverdue",
+                                "amount",
+                                "currency",
+                                "closeDate",
+                                "probability",
+                                "position",
+                                "ownerId",
+                                "pointOfContactId",
+                                "companyId",
+                                "owner",
+                                "pointOfContact",
+                                "company",
+                                "createdBy",
+                                "custom",
+                                "deletedAt",
+                                "createdAt",
+                                "updatedAt",
+                                "deletion"
+                            ]
                         }
                     },
                     "nextCursor": {

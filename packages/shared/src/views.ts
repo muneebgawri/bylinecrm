@@ -310,6 +310,25 @@ export const LIST_COUNT_CAP = 10_000;
 // ─────────────────────────────────────────────────────────────────────────────
 
 /** What one bulk request may do to many records of one object. */
+/**
+ * Why a record was deleted, as the person deleting it says. Deleting is for a record that is not a lead at all;
+ * a lead its owner no longer works is released instead (it stays in the CRM for someone else).
+ */
+export const DELETE_REASONS = ['not_a_lead', 'duplicate', 'wrong_details', 'other'] as const;
+export type DeleteReason = (typeof DELETE_REASONS)[number];
+/** The longest note a deletion may carry. */
+export const DELETE_NOTE_MAX = 500;
+/** A trashed record's deletion: when, why, and the member who did it (null: an API key, an import or a job). */
+export interface RecordDeletion {
+    /** ISO 8601. */
+    at: string;
+    reason: DeleteReason | null;
+    note: string | null;
+    byMemberId: string | null;
+}
+/** A record as the trash lists it. */
+export type Trashed<V> = V & { deletion: RecordDeletion };
+
 export const BULK_ACTIONS = ['assign_owner', 'delete', 'restore'] as const;
 export type BulkAction = (typeof BULK_ACTIONS)[number];
 /** The most records one bulk request may name or match; more is `413`. */

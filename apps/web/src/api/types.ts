@@ -77,6 +77,8 @@ export type RecordSummaryView = Schemas['RecordSummary'];
 
 /** A page of a record list: the cursor page plus the size of the whole filtered, scoped set. */
 export type PersonPage = Schemas['PersonPage'];
+export type TrashedPersonPage = Schemas['TrashedPersonPage'];
+export type TrashedCompanyPage = Schemas['TrashedCompanyPage'];
 export type CompanyPage = Schemas['CompanyPage'];
 export type OpportunityPage = Schemas['OpportunityPage'];
 export type NotePage = Schemas['NotePage'];

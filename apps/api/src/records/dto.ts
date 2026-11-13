@@ -10,6 +10,7 @@ import {
     bareDomain,
 } from '@bylinecrm/shared';
 import { companyDomain } from './company-domain';
+import { DELETE_NOTE_MAX, DELETE_REASONS } from '@bylinecrm/shared';
 import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
 import { optionsProblem } from './custom-fields/custom-values';
@@ -142,6 +143,14 @@ export class UpdateCompanyDto extends createZodDto(z.object(companyFields).parti
  * `field:asc,field2:desc`, `view` a saved view whose filter and sorts apply as defaults; the
  * planner (P1-4) checks the fields they name against the object.
  */
+/** `DELETE` of a record: why it is deleted, and a note — both optional, shown in the trash. */
+export class DeleteRecordQueryDto extends createZodDto(
+    z.object({
+        reason: z.enum(DELETE_REASONS).optional(),
+        note: z.string().trim().min(1).max(DELETE_NOTE_MAX).optional(),
+    }),
+) {}
+
 export class ListQueryDto extends createZodDto(
     z.object({
         cursor: z.string().min(1).optional(),

@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
-import type { Actor, DomainEvent, LostReason } from '@bylinecrm/shared';
+import type { Actor, DomainEvent, LostReason, Trashed } from '@bylinecrm/shared';
 import type { Prisma } from '@prisma/client';
 import { RotationService } from '../cadence/rotation.service';
 import { CompanyOwnership, isCaller } from './company-ownership';
@@ -18,6 +18,7 @@ import { type CountedPage, countTotal, EMPTY_COUNTED_PAGE, paginate } from './li
 import type { ListQuery } from './people.service';
 import { listScope } from '../query/query.service';
 import { countRows } from '../query/rows';
+import { RESTORED, trashedNow, withDeletions, type DeletionWhy } from './deletion';
 import { recordWhere, resolveOwner } from './record-scope';
 import {
     assertCompanyExists,
@@ -225,12 +226,18 @@ export class OpportunitiesService implements BulkRecords {
         return view(after);
     }
 
-    async remove(id: string): Promise<void> {
+    async remove(id: string, why?: DeletionWhy): Promise<void> {
         const context = this.current();
         await this.rls.withWorkspace(async (tx) => {
-            const { event } = await this.removeIn(tx, context, id);
+            const { event } = await this.removeIn(tx, context, id, why);
             await this.events.record(tx, event);
         });
+    }
+
+    /** The trash, each record with when, why and by whom it was deleted. */
+    async listDeleted(query: ListQuery): Promise<CountedPage<Trashed<OpportunityView>>> {
+        const page = await this.list(query, true);
+        return this.rls.withWorkspace((tx) => withDeletions(tx, 'opportunity', page));
     }
 
     async restore(id: string): Promise<OpportunityView> {
@@ -306,10 +313,15 @@ export class OpportunitiesService implements BulkRecords {
         };
     }
 
-    async removeIn(tx: WorkspaceClient, context: WorkspaceRunContext, id: string): Promise<{ event: DomainEvent }> {
+    async removeIn(
+        tx: WorkspaceClient,
+        context: WorkspaceRunContext,
+        id: string,
+        why?: DeletionWhy,
+    ): Promise<{ event: DomainEvent }> {
         const result = await tx.opportunity.updateMany({
             where: { id, ...recordWhere(context, false) },
-            data: { deletedAt: new Date() },
+            data: trashedNow(context, why),
         });
         if (result.count === 0) throw notFound();
         return { event: event(context, 'opportunity.deleted', id) };
@@ -322,7 +334,7 @@ export class OpportunitiesService implements BulkRecords {
     ): Promise<{ row: OpportunityRow; event: DomainEvent }> {
         const result = await tx.opportunity.updateMany({
             where: { id, ...recordWhere(context, true) },
-            data: { deletedAt: null },
+            data: RESTORED,
         });
         if (result.count === 0) throw notFound();
         return { row: await find(tx, context, id), event: event(context, 'opportunity.restored', id) };
