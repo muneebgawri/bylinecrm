@@ -1,7 +1,12 @@
 import { Injectable } from '@nestjs/common';
 import type { DomainEvent, Emails } from '@bylinecrm/shared';
 import { DomainEvents } from '../events/domain-events.service';
-import { OutboxConsumerOf, type DeliveredEvent, type OutboxConsumer } from '../events/outbox-consumer';
+import {
+    ConsumerContinues,
+    OutboxConsumerOf,
+    type DeliveredEvent,
+    type OutboxConsumer,
+} from '../events/outbox-consumer';
 import { RlsPrismaService } from '../infra/rls-prisma.service';
 import { stored } from '../records/references';
 import { MAIL_REMATCH_BATCH, MAIL_REMATCH_BUDGET_MS } from './mail-sync.constants';
@@ -30,8 +35,8 @@ const PERSON_CHANGES = new Set<string>(['person.created', 'person.updated', 'per
  * A re-match is bounded (#389): `MAIL_REMATCH_BATCH` participants per transaction, each batch
  * reconciled and committed with its timeline, until nothing changes — so a staff address on tens of
  * thousands of messages never holds one transaction or the whole set in memory. One delivery works
- * for `MAIL_REMATCH_BUDGET_MS` at most; what is left is handed to the relay's next attempt, which
- * resumes where the last commit left off, as any retry of an idempotent consumer does.
+ * for `MAIL_REMATCH_BUDGET_MS` at most; what is left is handed to the relay's next scan
+ * (`ConsumerContinues`, no attempt spent), which resumes where the last commit left off.
  */
 @Injectable()
 @OutboxConsumerOf('mail-sync')
@@ -75,8 +80,8 @@ export class MailSyncSubscriber implements OutboxConsumer {
             if (changed === 0) return;
             messages += changed;
             if (Date.now() - started >= MAIL_REMATCH_BUDGET_MS) {
-                throw new Error(
-                    `re-match of ${addresses.length} address(es) continues on the next delivery: ${messages} messages re-pointed so far`,
+                throw new ConsumerContinues(
+                    `re-match of ${addresses.length} address(es) continues: ${messages} messages re-pointed so far`,
                 );
             }
         }

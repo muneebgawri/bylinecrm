@@ -132,7 +132,9 @@ export class MailOutboxRelay implements OnApplicationBootstrap, OnModuleDestroy 
                 ? { sentAt: state.at, lastError: null, sealed: '' }
                 : state.outcome === 'failed'
                   ? { failedAt: state.at, lastError: state.lastError, sealed: '' }
-                  : { nextAttemptAt: state.nextAttemptAt, lastError: state.lastError };
+                  : state.outcome === 'continuing'
+                    ? { nextAttemptAt: null, lastError: state.progress, attempts: { decrement: 1 } }
+                    : { nextAttemptAt: state.nextAttemptAt, lastError: state.lastError };
         await this.ownerPrisma.mailOutbox.update({
             where: { id },
             data: { ...outcome, ...(extra ?? {}), leaseUntil: null },

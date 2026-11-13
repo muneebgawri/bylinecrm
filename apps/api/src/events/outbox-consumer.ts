@@ -25,6 +25,20 @@ export interface OutboxConsumer {
 }
 
 /**
+ * Thrown by a consumer that committed some of an event's work and has more to do (#389): the relay
+ * delivers the event again at once, to this consumer only, without spending an attempt. For a
+ * consumer whose work for one event is unbounded (re-pointing a staff address's tens of thousands of
+ * messages): it works for a budget, commits, and throws this with a note of its progress; redelivered,
+ * it resumes where the commit left off, as an idempotent consumer does.
+ */
+export class ConsumerContinues extends Error {
+    constructor(progress: string) {
+        super(progress);
+        this.name = 'ConsumerContinues';
+    }
+}
+
+/**
  * Marks a provider as an outbox consumer under a stable name. The name is stored with each event
  * the consumer finishes, so it must never change once deployed; renaming one redelivers every open
  * event to it under the new name.
