@@ -149,6 +149,7 @@ export const notificationSettingsView = named(
         notifyEmailOpens: z.boolean().meta({
             description: 'The bell the first time an email you sent is opened. Approximate: mail apps preload images.',
         }),
+        notifySound: z.boolean().meta({ description: 'A short sound in the app when a notification arrives.' }),
     }),
 );
 

@@ -137,6 +137,8 @@ export interface NotificationSettings {
     notifyEmailClicks: boolean;
     /** A bell notification the first time a send of theirs is opened — approximate: mail apps preload images. */
     notifyEmailOpens: boolean;
+    /** A short sound in the app when a notification arrives (on unless turned off). */
+    notifySound: boolean;
 }
 
 /** A send a member made, as the bell shows a reply to, click in or open of it. */

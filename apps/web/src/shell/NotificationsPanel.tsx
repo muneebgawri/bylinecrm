@@ -1,5 +1,5 @@
 import { TRANSFER_REASON_CADENCE_ROTATION } from '@bylinecrm/shared';
-import { Button, Switch, Tabs, TabsList, TabsTrigger, cn, toneSoft, type Tone } from '@bylinecrm/ui';
+import { Button, Switch, Tabs, TabsList, TabsTrigger, cn, toast, toneSoft, type Tone } from '@bylinecrm/ui';
 import {
     ArrowRightLeft,
     Bell,
@@ -14,8 +14,11 @@ import {
 } from 'lucide-react';
 import { useId, useState, type ReactElement, type ReactNode } from 'react';
 import { Link } from 'react-router';
+import { ApiError } from '../api/client';
 import { useMarkNotificationsRead, useNotificationSettings, useUpdateNotificationSettings } from '../api/notifications';
-import type { NotificationSettingsView, NotificationsView } from '../api/types';
+import { useDecideTransfer } from '../api/transfers';
+import type { MembershipSummary, NotificationSettingsView, NotificationsView } from '../api/types';
+import { useMembership } from '../auth/capabilities';
 import { ResponsivePanel } from '../components/ResponsivePanel';
 import { formatDate, formatRelative } from '../lib/format';
 import { paths } from '../routes/paths';
@@ -104,6 +107,59 @@ function transferLine(item: Item): string {
                 ? `${t.recordLabel} rotated to ${who(t.to)}: its follow-up cadence lapsed`
                 : `${t.recordLabel} went to ${who(t.to)}`;
     }
+}
+
+/**
+ * Whether the member can open the record a transfer notification is about. A member who sees every record can;
+ * one who keeps to their own (`recordScope: 'own'`) can only while it is theirs — the receiver once the transfer
+ * completed, the owner it left from until then. An offer still waiting is not the receiver's to open (the record
+ * page answers "not found"), which is why the offer is answered here, in the panel.
+ */
+export function canOpenTransferRecord(
+    transfer: NonNullable<Item['transfer']>,
+    membership: Pick<MembershipSummary, 'memberId' | 'recordScope'> | null,
+): boolean {
+    if (membership?.recordScope !== 'own') return true;
+    const moved = transfer.status === 'accepted' || transfer.status === 'forced';
+    return (moved ? transfer.to.memberId : transfer.from?.memberId) === membership.memberId;
+}
+
+/** How an offer the member was sent ended, said under it once it is no longer waiting on them. */
+const OFFER_ENDED: Partial<Record<NonNullable<Item['transfer']>['status'], string>> = {
+    accepted: 'You accepted.',
+    declined: 'You declined.',
+    cancelled: 'The offer was taken back.',
+};
+
+/**
+ * The receiver's answer to an offer, in the notification that tells them of it: accept (the record and what goes
+ * with it become theirs) or decline. The same two actions as under the record's owner field.
+ */
+function OfferActions({ workspaceId, item }: { workspaceId: string; item: Item }) {
+    const decide = useDecideTransfer(workspaceId);
+    const read = useMarkNotificationsRead(workspaceId);
+    const act = async (action: 'accept' | 'decline') => {
+        try {
+            await decide.mutateAsync({ id: item.transfer!.id, action });
+            if (!item.readAt) read.mutate([item.id]);
+            toast({
+                tone: 'success',
+                title: action === 'accept' ? `${item.transfer!.recordLabel} is yours now.` : 'Declined.',
+            });
+        } catch (e) {
+            toast({ tone: 'danger', title: e instanceof ApiError ? e.message : 'Could not do that.' });
+        }
+    };
+    return (
+        <span className="mt-1.5 flex flex-wrap gap-1.5">
+            <Button size="sm" variant="primary" shape="square" loading={decide.isPending} onClick={() => act('accept')}>
+                Accept
+            </Button>
+            <Button size="sm" shape="square" disabled={decide.isPending} onClick={() => act('decline')}>
+                Decline
+            </Button>
+        </span>
+    );
 }
 
 /**
@@ -220,10 +276,15 @@ function guardrailLine(item: Item): string {
 }
 
 function NotificationLink({ workspaceId, item, onOpen }: { workspaceId: string; item: Item; onOpen: () => void }) {
+    const membership = useMembership();
+    /** An offer still waiting on this member: answered here, since its record is not theirs to open yet. */
+    const offer = item.kind === 'transfer_proposed' && item.transfer?.status === 'proposed';
     const target = item.task
         ? item.task.targets[0]
         : item.transfer
-          ? { type: item.transfer.object, id: item.transfer.recordId }
+          ? canOpenTransferRecord(item.transfer, membership)
+              ? { type: item.transfer.object, id: item.transfer.recordId }
+              : undefined
           : item.invoice
             ? { type: 'opportunity' as const, id: item.invoice.opportunityId }
             : item.cadence
@@ -278,6 +339,9 @@ function NotificationLink({ workspaceId, item, onOpen }: { workspaceId: string; 
                 {item.transfer?.reason && (
                     <span className="block truncate text-xs text-text-muted">{item.transfer.reason}</span>
                 )}
+                {item.kind === 'transfer_proposed' && item.transfer && OFFER_ENDED[item.transfer.status] && (
+                    <span className="block truncate text-xs text-text-muted">{OFFER_ENDED[item.transfer.status]}</span>
+                )}
                 {item.email && (
                     <span className="block truncate text-xs text-text-muted">
                         {item.email.subject || '(no subject)'}
@@ -294,6 +358,17 @@ function NotificationLink({ workspaceId, item, onOpen }: { workspaceId: string; 
     );
     const className =
         'flex items-start gap-3 px-3 py-3 hover:bg-surface-raised focus-visible:bg-surface-raised outline-none max-md:min-h-touch';
+    // An offer waiting on the member is not a link: its buttons answer it, and a link may not hold buttons.
+    if (offer) {
+        return (
+            <div className="px-3 py-3">
+                <div className="flex items-start gap-3">{body}</div>
+                <div className="pl-11">
+                    <OfferActions workspaceId={workspaceId} item={item} />
+                </div>
+            </div>
+        );
+    }
     return to ? (
         <Link to={to} onClick={onOpen} className={className}>
             {body}
@@ -305,12 +380,13 @@ function NotificationLink({ workspaceId, item, onOpen }: { workspaceId: string; 
 
 type SettingKey = keyof NotificationSettingsView;
 
-/** The member's say (#192): the daily email of tasks due, and the bell for replies, clicks and opens of their sends. */
+/** The member's say (#192): the daily email of tasks due, the bell for replies, clicks and opens of their sends, and its sound. */
 const SETTINGS: readonly { key: SettingKey; label: string }[] = [
     { key: 'taskDigest', label: 'Daily email of tasks due, each morning' },
     { key: 'notifyEmailReplies', label: 'Replies to emails I send' },
     { key: 'notifyEmailClicks', label: 'Links clicked in emails I send' },
     { key: 'notifyEmailOpens', label: 'Emails I send opened (approximate: mail apps preload images)' },
+    { key: 'notifySound', label: 'A sound when a notification arrives' },
 ];
 
 /** Each on unless the member turns it off; a switch changes only its own setting. */

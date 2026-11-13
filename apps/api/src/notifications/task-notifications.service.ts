@@ -36,6 +36,7 @@ const SETTINGS = {
     notifyEmailReplies: true,
     notifyEmailClicks: true,
     notifyEmailOpens: true,
+    notifySound: true,
 } as const satisfies Record<keyof NotificationSettings, true>;
 
 /**
