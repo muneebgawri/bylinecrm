@@ -9,9 +9,10 @@ export const MAIL_INITIAL_SYNC_DAYS = 30;
 /**
  * The mail history backfill: a mailbox's sync reaches back past its first import to a history floor, once, so mail
  * account managers sent from Gmail before the CRM — and the replies — is on the records and counts toward contact
- * status. Product decision (2026-11): every connected mailbox, back to this date.
+ * status. Product decision (2026-11): every connected mailbox, back to this date — the company's oldest mail (a probe
+ * of every mailbox, `probe-mail-history`, found five reaching May 2022 and none older; first set to 2023-04-01).
  */
-export const MAIL_HISTORY_FLOOR_DEFAULT = '2023-04-01';
+export const MAIL_HISTORY_FLOOR_DEFAULT = '2022-05-01';
 /** The backfill walks back this many calendar months (UTC) per step, newest first: a step is one window. */
 export const MAIL_BACKFILL_WINDOW_MONTHS = 1;
 /**

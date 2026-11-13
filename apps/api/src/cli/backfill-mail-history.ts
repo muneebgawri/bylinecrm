@@ -59,10 +59,10 @@ export function backfillCliArgs(argv: readonly string[]): BackfillCliArgs | null
 }
 
 /**
- * `node dist/cli/backfill-mail-history.js <workspace-slug> (--estimate | --apply) [--since 2023-04-01]
+ * `node dist/cli/backfill-mail-history.js <workspace-slug> (--estimate | --apply) [--since 2022-05-01]
  * [--mailbox <address>] [--sample <n>] [--concurrency <n>]` — the mail history backfill, run by the operator inside
  * the api container. Every connected Gmail mailbox of the workspace (or the one named) is walked back from where its
- * first import began to `--since` (default 2023-04-01), a month at a time, newest first, by the sync itself
+ * first import began to `--since` (default `MAIL_HISTORY_FLOOR_DEFAULT`, 2022-05-01), a month at a time, newest first, by the sync itself
  * (`MailSyncService.backfillStep`): what the mailbox already holds is skipped, the rest read as headers only, and only
  * a message with a person of the workspace in it is read whole and stored — on the timelines, counting toward contact
  * status, like any synced mail.

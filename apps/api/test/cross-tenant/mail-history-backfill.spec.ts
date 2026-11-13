@@ -10,6 +10,7 @@ import { AppModule } from '../../src/app.module';
 import { PrismaService } from '../../src/infra/prisma.service';
 import { GOOGLE_OAUTH_PORT } from '../../src/mail-accounts/google-oauth.port';
 import { MAIL_OAUTH_CALLBACK_PATH } from '../../src/mail-accounts/mail-accounts.constants';
+import { MAIL_HISTORY_FLOOR_DEFAULT } from '../../src/mail-sync/mail-sync.constants';
 import { GMAIL_PORT } from '../../src/mail-sync/gmail.port';
 import { MailSyncService, type BackfillStepResult } from '../../src/mail-sync/mail-sync.service';
 import { FakeGmail } from '../support/fake-gmail';
@@ -394,7 +395,7 @@ describe('mail history backfill', () => {
         const started = await as(admin).post(w('/mail/history-backfill')).send({});
         expect(started.status).toBe(202);
         const view = started.body as BackfillView;
-        expect(view.floor).toBe('2023-04-01');
+        expect(view.floor).toBe(MAIL_HISTORY_FLOOR_DEFAULT);
         expect(view.maxBytes).toBeGreaterThan(0);
         // The default floor is below this mailbox's: its walk is running again.
         expect(view.mailboxes).toEqual([
@@ -402,7 +403,7 @@ describe('mail history backfill', () => {
         ]);
         const read = await as(admin).get(w('/mail/history-backfill'));
         expect(read.status).toBe(200);
-        expect((await state()).historyFloor!.toISOString()).toBe('2023-04-01T00:00:00.000Z');
+        expect((await state()).historyFloor!.toISOString()).toBe(`${MAIL_HISTORY_FLOOR_DEFAULT}T00:00:00.000Z`);
         // Leave nothing running for later specs' workers.
         await owner.mailboxSyncState.update({ where: { mailboxId: mailbox }, data: { backfillStatus: 'done' } });
     });

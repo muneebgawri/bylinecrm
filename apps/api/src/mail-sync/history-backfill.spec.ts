@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { MAIL_HISTORY_FLOOR_DEFAULT } from './mail-sync.constants';
 import { backfillCliArgs } from '../cli/backfill-mail-history';
 import {
     addProgress,
@@ -116,7 +117,7 @@ describe('backfill-mail-history CLI arguments', () => {
         });
         expect(backfillCliArgs(['pinion', '--apply', '--concurrency', '8'])).toMatchObject({
             mode: 'apply',
-            since: '2023-04-01',
+            since: MAIL_HISTORY_FLOOR_DEFAULT,
             mailbox: null,
             sample: null,
             concurrency: 8,
