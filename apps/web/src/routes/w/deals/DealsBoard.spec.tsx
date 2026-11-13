@@ -86,6 +86,7 @@ const BOARD: BoardView = {
         return {
             stage: s,
             count: deals.length,
+            valuedCount: deals.length,
             amountMinorByCurrency: deals.length ? { USD: 1_200_000 } : {},
             deals,
             hasMore: false,

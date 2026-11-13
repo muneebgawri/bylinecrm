@@ -94,6 +94,9 @@ export const boardColumn = named(
     z.object({
         stage: stageView,
         count: z.number().int().meta({ description: "Deals in the stage under the filter and the caller's scope." }),
+        valuedCount: z.number().int().meta({
+            description: 'Of `count`, the deals with an amount above zero: the ones `amountMinorByCurrency` adds up.',
+        }),
         amountMinorByCurrency: z.record(z.string(), z.number().int()),
         deals: z.array(opportunityView),
         hasMore: z.boolean(),

@@ -7,6 +7,8 @@ import { WorkspaceContext, type WorkspaceRunContext } from '../infra/workspace-c
 import { TransfersService } from '../transfers/transfers.service';
 import { CompanyOwnership, normalisedDomain } from './company-ownership';
 import { recordWhere } from './record-scope';
+import type { OwnerLoadView } from './responses';
+import { MEMBER_SUMMARY_SELECT, memberSummaryOf } from './summaries';
 
 const DOMAIN = /^(?=.{3,253}$)([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/;
 
@@ -51,6 +53,45 @@ export class OwnershipService {
         await this.rls.withWorkspace((tx) =>
             tx.companyDomain.deleteMany({ where: { companyId, domain: normalisedDomain(raw) } }),
         );
+    }
+
+    /**
+     * Who holds how many leads: per owner, the live people they own, those still `new`, and their open deals — a
+     * row for every member in the workspace (none held is a row of zeros), for a member who has left only while
+     * they still hold something, and one for the records nobody owns. Most people first.
+     */
+    load(): Promise<OwnerLoadView[]> {
+        return this.rls.withWorkspace(async (tx) => {
+            const [people, fresh, deals, members] = await Promise.all([
+                tx.person.groupBy({ by: ['ownerId'], where: { deletedAt: null }, _count: { _all: true } }),
+                tx.person.groupBy({
+                    by: ['ownerId'],
+                    where: { deletedAt: null, contactStatus: 'new' },
+                    _count: { _all: true },
+                }),
+                tx.opportunity.groupBy({
+                    by: ['ownerId'],
+                    where: { deletedAt: null, closedAt: null },
+                    _count: { _all: true },
+                }),
+                tx.workspaceMember.findMany({ select: MEMBER_SUMMARY_SELECT }),
+            ]);
+            const counts = (rows: { ownerId: string | null; _count: { _all: number } }[]) =>
+                new Map(rows.map((r) => [r.ownerId, r._count._all]));
+            const [p, n, d] = [counts(people), counts(fresh), counts(deals)];
+            const row = (member: OwnerLoadView['member'], id: string | null): OwnerLoadView => ({
+                member,
+                people: p.get(id) ?? 0,
+                newPeople: n.get(id) ?? 0,
+                openDeals: d.get(id) ?? 0,
+            });
+            const rows = members
+                .map((m) => row(memberSummaryOf(m), m.id))
+                .filter((r) => r.member!.leftAt === null || r.people + r.openDeals > 0);
+            const nobody = row(null, null);
+            if (nobody.people + nobody.openDeals > 0) rows.push(nobody);
+            return rows.sort((a, b) => b.people - a.people || b.openDeals - a.openDeals);
+        });
     }
 
     conflicts(): Promise<OwnershipConflictView[]> {

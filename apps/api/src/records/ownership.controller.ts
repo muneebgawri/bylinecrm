@@ -11,7 +11,7 @@ import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
 import { Requires, TenantController } from '../auth/decorators';
 import { named, Returns } from '../openapi/responses';
-import { companyDomainView, ownershipConflictView } from './responses';
+import { companyDomainView, ownerLoadView, ownershipConflictView, type OwnerLoadView } from './responses';
 import { TransfersService } from '../transfers/transfers.service';
 import { OwnershipService } from './ownership.service';
 
@@ -111,6 +111,14 @@ export class OwnershipController {
     @Returns(ownershipSettingsView)
     setSettings(@Body() body: OwnershipSettingsDto): Promise<OwnershipSettingsView> {
         return this.transfers.setSettings(body);
+    }
+
+    /** Who holds how many leads (Reports): a manager's view of the team, as the conflicts are. */
+    @Requires('record:transfer')
+    @Get('load')
+    @Returns([ownerLoadView])
+    load(): Promise<OwnerLoadView[]> {
+        return this.ownership.load();
     }
 
     @Requires('record:transfer')

@@ -471,7 +471,7 @@ export class PipelinesService {
             const columns: BoardColumn[] = [];
             for (const stage of pipeline.stages) {
                 const stageWhere = { ...where, stageId: stage.id };
-                const [rows, sums] = await Promise.all([
+                const [rows, sums, valued] = await Promise.all([
                     tx.opportunity.findMany({
                         where: stageWhere,
                         include: opportunityInclude,
@@ -484,6 +484,7 @@ export class PipelinesService {
                         _sum: { amountMinor: true },
                         _count: { _all: true },
                     }),
+                    tx.opportunity.count({ where: { ...stageWhere, amountMinor: { gt: 0 } } }),
                 ]);
                 const amountMinorByCurrency: Record<string, number> = {};
                 let count = 0;
@@ -495,6 +496,7 @@ export class PipelinesService {
                 columns.push({
                     stage: stageView(stage),
                     count,
+                    valuedCount: valued,
                     amountMinorByCurrency,
                     deals: rows.slice(0, BOARD_STAGE_LIMIT).map(dealView),
                     hasMore: rows.length > BOARD_STAGE_LIMIT,

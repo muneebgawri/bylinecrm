@@ -8678,6 +8678,74 @@
                 "tags": ["companies"]
             }
         },
+        "/api/w/{workspaceId}/ownership/load": {
+            "get": {
+                "operationId": "ownership_load",
+                "parameters": [
+                    {
+                        "name": "workspaceId",
+                        "required": true,
+                        "in": "path",
+                        "description": "The workspace",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/OwnerLoad"
+                                    }
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "4XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    },
+                    "5XX": {
+                        "description": "The error envelope",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "x-request-id": {
+                                "$ref": "#/components/headers/RequestId"
+                            }
+                        }
+                    }
+                },
+                "tags": ["companies"]
+            }
+        },
         "/api/w/{workspaceId}/ownership/conflicts": {
             "get": {
                 "operationId": "ownership_conflicts",
@@ -39014,6 +39082,39 @@
                     "companyOwnerName"
                 ]
             },
+            "OwnerLoad": {
+                "type": "object",
+                "properties": {
+                    "member": {
+                        "nullable": true,
+                        "description": "The owner; null for the records nobody owns.",
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/MemberSummary"
+                            }
+                        ]
+                    },
+                    "people": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991,
+                        "description": "Live people they own."
+                    },
+                    "newPeople": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991,
+                        "description": "Of those, people whose contact status is still `new`."
+                    },
+                    "openDeals": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991,
+                        "description": "Open deals they own."
+                    }
+                },
+                "required": ["member", "people", "newPeople", "openDeals"]
+            },
             "OwnerLookup": {
                 "type": "object",
                 "properties": {
@@ -39314,6 +39415,12 @@
                         "maximum": 9007199254740991,
                         "description": "Deals in the stage under the filter and the caller's scope."
                     },
+                    "valuedCount": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991,
+                        "description": "Of `count`, the deals with an amount above zero: the ones `amountMinorByCurrency` adds up."
+                    },
                     "amountMinorByCurrency": {
                         "type": "object",
                         "additionalProperties": {
@@ -39332,7 +39439,7 @@
                         "type": "boolean"
                     }
                 },
-                "required": ["stage", "count", "amountMinorByCurrency", "deals", "hasMore"]
+                "required": ["stage", "count", "valuedCount", "amountMinorByCurrency", "deals", "hasMore"]
             },
             "Board": {
                 "type": "object",

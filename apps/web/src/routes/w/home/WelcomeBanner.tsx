@@ -6,7 +6,7 @@ import { useProfile } from '../../../api/queries';
 import { useMembersSummary } from '../../../api/records';
 import { formatMoneyCompact } from '../../../lib/money';
 import { paths } from '../../paths';
-import { boardCurrency, count, open, sumOf, won } from '../reports/reportsData';
+import { boardCurrency, count, open, sumOf, valuedCount, won } from '../reports/reportsData';
 
 /**
  * The dashboard's welcome (moved from Reports, #360): the pipeline live, the reader by name, one line on the
@@ -23,6 +23,8 @@ export function WelcomeBanner({ workspaceId, attention }: { workspaceId: string;
     const money = (amountMinor: number) => formatMoneyCompact({ amountMinor, currency });
     const name = profile.data?.displayName ?? profile.data?.email ?? '';
     const openCount = count(open(data));
+    // The value is the sum of the deals that have one: say how many those are, or a few priced deals read as all.
+    const valued = valuedCount(open(data));
     const risky = attention ?? 0;
     const today = new Date().toLocaleDateString(undefined, {
         weekday: 'long',
@@ -49,8 +51,11 @@ export function WelcomeBanner({ workspaceId, attention }: { workspaceId: string;
                     {data ? (
                         <p className="m-0 mt-1 text-sm leading-6 text-text-muted">
                             Here's how your pipeline is performing today —{' '}
-                            <b className="font-semibold text-text">{openCount}</b> open{' '}
-                            {openCount === 1 ? 'deal' : 'deals'} worth{' '}
+                            <b className="font-semibold text-text">{openCount.toLocaleString()}</b> open{' '}
+                            {openCount === 1 ? 'deal' : 'deals'}
+                            {valued === openCount
+                                ? ' worth '
+                                : `; the ${valued.toLocaleString()} with a value are worth `}
                             <b className="font-semibold text-text">{money(sumOf(open(data), currency).amountMinor)}</b>
                             {attention === null ? (
                                 '.'
@@ -87,6 +92,11 @@ export function WelcomeBanner({ workspaceId, attention }: { workspaceId: string;
                         <HeroStat
                             label="Pipeline value"
                             value={data ? money(sumOf(open(data), currency).amountMinor) : '…'}
+                            note={
+                                data && valued !== openCount
+                                    ? `${valued.toLocaleString()} deals with a value`
+                                    : undefined
+                            }
                         />
                         <HeroStat label="Deals won" value={data ? count(won(data)).toLocaleString() : '…'} />
                         <HeroStat label="Open deals" value={data ? openCount.toLocaleString() : '…'} dot />
@@ -115,7 +125,18 @@ export function WelcomeBanner({ workspaceId, attention }: { workspaceId: string;
     );
 }
 
-function HeroStat({ label, value, dot = false }: { label: string; value: string; dot?: boolean }) {
+function HeroStat({
+    label,
+    value,
+    note,
+    dot = false,
+}: {
+    label: string;
+    value: string;
+    /** What the figure counts, under it, when the label alone would mislead. */
+    note?: string | undefined;
+    dot?: boolean;
+}) {
     return (
         <div className="border-r border-border/60 pr-5 last:border-r-0">
             <div className="text-[11px] font-medium tracking-wide text-text-muted uppercase">{label}</div>
@@ -123,6 +144,7 @@ function HeroStat({ label, value, dot = false }: { label: string; value: string;
                 {dot && <span aria-hidden className="size-1.5 rounded-full bg-success" />}
                 {value}
             </div>
+            {note && <div className="text-[11px] text-text-muted">{note}</div>}
         </div>
     );
 }

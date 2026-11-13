@@ -113,6 +113,7 @@ export const addressCheckView = named(
     }),
 );
 export type AddressCheckView = z.output<typeof addressCheckView>;
+export type OwnerLoadView = z.output<typeof ownerLoadView>;
 
 export const personPage = named('PersonPage', countedPage(personView));
 
@@ -340,6 +341,17 @@ export const ownershipConflictView = named(
         companyName: z.string(),
         companyOwnerMemberId: id,
         companyOwnerName: z.string().nullable(),
+    }),
+);
+
+/** Who holds how many leads (Reports → Leads by owner): one row per owner, `member` null for nobody. */
+export const ownerLoadView = named(
+    'OwnerLoad',
+    z.object({
+        member: memberSummaryView.nullable().meta({ description: 'The owner; null for the records nobody owns.' }),
+        people: z.number().int().meta({ description: 'Live people they own.' }),
+        newPeople: z.number().int().meta({ description: 'Of those, people whose contact status is still `new`.' }),
+        openDeals: z.number().int().meta({ description: 'Open deals they own.' }),
     }),
 );
 

@@ -138,6 +138,8 @@ const GETS: [RegExp, Handler][] = [
     // OWN-2: a company's other domains, and the ownership report; none in the fixtures.
     [new RegExp(`^${W}/companies/${ID}/domains$`), () => []],
     [new RegExp(`^${W}/ownership/conflicts$`), () => []],
+    // Reports → Leads by owner: the owners and what each holds; none in the fixtures.
+    [new RegExp(`^${W}/ownership/load$`), () => []],
     // OWN-1, owner decision 2: the transfer cooling period (the default).
     [new RegExp(`^${W}/ownership/settings$`), () => ({ transferCoolingDays: 14, dormantOwnerMonths: 6 })],
     // GUARD-1: the guardrail events; none in the fixtures.
