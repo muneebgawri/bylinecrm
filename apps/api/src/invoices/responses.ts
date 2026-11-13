@@ -172,7 +172,7 @@ export const ownershipDeliveryView = named(
         }),
         reasonCode: z.string().nullable().meta({
             description:
-                'NewswireOS’s `reason_code` (`NO_AM_FOR_EMAIL`, `STALE`, `NO_CUSTOMER`, `REASSIGNED`, `UNCHANGED`, `AGENCY_CLIENT`), or `NEWSWIREOS_NOT_READY`, `TOKEN_REFUSED` (401), `TOKEN_LACKS_SCOPE` (403), `BAD_REQUEST` (400), `REJECTED`, `NEWSWIREOS_UNAVAILABLE`, `PUSH_OFF`.',
+                'NewswireOS’s `reason_code` (`NO_AM_FOR_EMAIL`, `STALE`, `NO_CUSTOMER`, `REASSIGNED`, `UNCHANGED`, `AGENCY_CLIENT`), or `NEWSWIREOS_NOT_READY`, `TOKEN_REFUSED` (401), `TOKEN_LACKS_SCOPE` (403), `BAD_REQUEST` (400), `REJECTED`, `NEWSWIREOS_UNAVAILABLE`, `NEWSWIREOS_THROTTLED` (429: sent again), `PUSH_OFF`.',
         }),
         httpStatus: z.number().int().nullable(),
         lastError: z.string().nullable(),

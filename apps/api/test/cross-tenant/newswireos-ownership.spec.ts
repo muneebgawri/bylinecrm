@@ -243,6 +243,51 @@ describe('PNW-765 ownership push to NewswireOS', () => {
         expect(newswireos.calls.map((c) => c.body.event_id)).toEqual([d.eventId, d.eventId]);
     });
 
+    it('a 429 is throttled, never failed, even on the last attempt: the queue waits and sends it again', async () => {
+        await move(person, (await latest()).newOwnerEmail === emails.ben ? adminId : benId);
+        newswireos.next(new NewswireosApiError(429, 'ThrottlerException: Too Many Requests'));
+        const d = await latest();
+        expect(await run(d.id, true)).toBe('throttled');
+        expect(await latest()).toMatchObject({
+            status: 'retrying',
+            httpStatus: 429,
+            reasonCode: 'NEWSWIREOS_THROTTLED',
+        });
+        expect(await run(d.id)).toBe('done');
+        expect(await latest()).toMatchObject({ status: 'delivered', matched: true });
+    });
+
+    it('resends the deliveries that failed as unavailable, once, and leaves decided ones alone', async () => {
+        await move(person, (await latest()).newOwnerEmail === emails.ben ? adminId : benId);
+        newswireos.next(new NewswireosApiError(503, 'NewswireOS answered 503'));
+        const unavailable = await latest();
+        expect(await run(unavailable.id, true)).toBe('done');
+        await move(person, (await latest()).newOwnerEmail === emails.ben ? adminId : benId);
+        newswireos.next(new NewswireosApiError(409, 'an older change', 'STALE'));
+        const decided = await latest();
+        expect(await run(decided.id)).toBe('done');
+        const queue = app.get<Queue>(getQueueToken(OWNERSHIP_PUSH_QUEUE));
+        await (await queue.getJob(unavailable.id))?.remove();
+
+        const before = await owner.newswireosOwnershipDelivery.count({
+            where: { workspaceId: workspace, status: 'failed', reasonCode: 'NEWSWIREOS_UNAVAILABLE' },
+        });
+        expect(await push.resendUnavailable(workspace, false)).toEqual({ found: before, queued: 0 });
+        expect(await push.resendUnavailable(workspace, true)).toEqual({ found: before, queued: before });
+        const rows = await deliveries();
+        expect(rows.find((r) => r.id === unavailable.id)?.status).toBe('pending');
+        expect(rows.find((r) => r.id === decided.id)?.status).toBe('failed');
+        expect((await queue.getJob(unavailable.id))?.data).toEqual({
+            workspaceId: workspace,
+            deliveryId: unavailable.id,
+        });
+        expect(await push.resendUnavailable(workspace, true)).toEqual({ found: 0, queued: 0 });
+        expect(await push.resendUnavailable(otherWorkspace, true)).toEqual({ found: 0, queued: 0 });
+        expect(await run(unavailable.id)).toBe('done');
+        expect((await deliveries()).find((r) => r.id === unavailable.id)?.status).toBe('delivered');
+        await (await queue.getJob(unavailable.id))?.remove();
+    });
+
     it('a 404 (the route not deployed yet) is "not ready" and never retried', async () => {
         await move(person, benId);
         newswireos.next(new NewswireosApiError(404, 'Not Found'));

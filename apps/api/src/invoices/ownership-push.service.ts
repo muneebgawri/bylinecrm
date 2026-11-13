@@ -111,9 +111,14 @@ export class OwnershipPushService {
 
     /**
      * Sends one delivery (the worker's half). `retry`: NewswireOS did not answer or failed on its side, and this is
-     * not the last attempt; the caller throws so the queue tries again.
+     * not the last attempt; the caller throws so the queue tries again. `throttled`: NewswireOS answered 429; the
+     * caller pauses the queue and puts the job back without spending an attempt, whichever attempt this was.
      */
-    async deliver(workspaceId: string, deliveryId: string, opts: { finalAttempt: boolean }): Promise<'done' | 'retry'> {
+    async deliver(
+        workspaceId: string,
+        deliveryId: string,
+        opts: { finalAttempt: boolean },
+    ): Promise<'done' | 'retry' | 'throttled'> {
         const { row, link } = await this.rls.withWorkspace(workspaceId, async (tx) => ({
             row: await tx.newswireosOwnershipDelivery.findUnique({ where: { id: deliveryId } }),
             link: await tx.newswireosSettings.findFirst({
@@ -155,6 +160,10 @@ export class OwnershipPushService {
                 // NewswireOS has decided (an older change than one it applied; no account manager for the email).
                 await settle({ ...failed, status: 'failed', reasonCode: e.reasonCode });
                 return 'done';
+            }
+            if (e.status === 429) {
+                await settle({ ...failed, status: 'retrying', reasonCode: OWNERSHIP_PUSH_REASONS.throttled });
+                return 'throttled';
             }
             if (e.status === 404) {
                 await settle({ ...failed, status: 'not_ready', reasonCode: OWNERSHIP_PUSH_REASONS.notReady });
@@ -206,6 +215,38 @@ export class OwnershipPushService {
             requeued += 1;
         }
         return requeued;
+    }
+
+    /**
+     * Sends again the deliveries that ran out of attempts because NewswireOS was unavailable or throttling
+     * (`NEWSWIREOS_UNAVAILABLE`, `NEWSWIREOS_THROTTLED`): each goes back to `pending` and is queued under its own id,
+     * so a second run adds nothing while they are in line. A delivery NewswireOS decided (any other code) is left as
+     * it is. NewswireOS orders changes by `occurred_at` (`STALE`), so a late push never undoes a newer one. Through the
+     * owner client: a server job, not a caller's request. Without `apply`, only counts.
+     */
+    async resendUnavailable(workspaceId: string, apply: boolean): Promise<{ found: number; queued: number }> {
+        const where = {
+            workspaceId,
+            status: 'failed',
+            reasonCode: { in: [OWNERSHIP_PUSH_REASONS.unavailable, OWNERSHIP_PUSH_REASONS.throttled] },
+        };
+        const rows = await this.ownerPrisma.newswireosOwnershipDelivery.findMany({
+            where,
+            select: { id: true },
+            orderBy: { createdAt: 'asc' },
+        });
+        if (!apply) return { found: rows.length, queued: 0 };
+        let queued = 0;
+        for (const row of rows) {
+            const { count } = await this.ownerPrisma.newswireosOwnershipDelivery.updateMany({
+                where: { ...where, id: row.id },
+                data: { status: 'pending' },
+            });
+            if (count === 0) continue;
+            await this.queue.add(OWNERSHIP_PUSH_JOB, { workspaceId, deliveryId: row.id }, { jobId: row.id });
+            queued += 1;
+        }
+        return { found: rows.length, queued };
     }
 
     /** Turns the push on or off (an admin's). Needs a link. */
