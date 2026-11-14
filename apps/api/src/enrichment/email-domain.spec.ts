@@ -24,7 +24,7 @@ describe('FR-CRMS-15 the email-addresses source', () => {
             expect(isFreeMailDomain(domain), domain).toBe(true);
         }
         // A service's relay addresses are its customers', not one company's.
-        for (const domain of ['intercom-mail.com', 'hubspotemail.net', 'onmicrosoft.com']) {
+        for (const domain of ['intercom-mail.com', 'hubspotemail.net', 'onmicrosoft.com', 'email4pr.com']) {
             expect(isFreeMailDomain(domain), domain).toBe(true);
         }
         // The provider's own staff write from another domain: that one is a company's.
