@@ -90,6 +90,9 @@ const CONSUMER_MAIL: ReadonlySet<string> = new Set([
     'intercom-mail.com',
     'hubspotemail.net',
     'onmicrosoft.com',
+    // A newswire's media-contact aliases: `<number>@email4pr.com` forwards to one person at whichever firm issued the
+    // release, so the domain is thousands of firms', none of them its own (433 people under one company, 2026-11).
+    'email4pr.com',
     // Anyone's
     'email.com',
     'duck.com',
