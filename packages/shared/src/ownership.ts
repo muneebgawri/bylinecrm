@@ -19,9 +19,18 @@ export function bareDomain(value: string): string {
         .replace(/^www\./, '');
 }
 
-/** Providers whose domain says nothing about a company: a person there is simply a person with mail. */
+/**
+ * Providers whose domain says nothing about a company: a person there is simply a person with mail. These names are
+ * the provider's own under any suffix, a mistyped one too (`gmail.con`): no firm writes from `yahoo.<anything>`.
+ */
 const FREE_MAIL =
-    /^(gmail|googlemail|yahoo|ymail|rocketmail|hotmail|outlook|live|msn|icloud|me|mac|aol|proton|protonmail|gmx|mail|yandex|zoho|fastmail|hey|tutanota|tuta|pm)\.[a-z.]+$/i;
+    /^(gmail|googlemail|yahoo|ymail|rocketmail|hotmail|outlook|icloud|aol|protonmail|gmx|yandex|fastmail|tutanota)\.[a-z.]+$/i;
+
+/**
+ * Providers named by an ordinary word, free mail only at a country's or the generic mail suffix: `mail.ru`,
+ * `live.co.uk`; but `mail.schwarz` and `live.events` are firms'.
+ */
+const WORD_FREE_MAIL = /^(live|mail)\.(com|[a-z]{2}|co\.[a-z]{2}|com\.[a-z]{2})$/i;
 
 /**
  * Consumer mailboxes an internet provider or a portal hands out, by their exact domain: the provider's own staff
@@ -93,6 +102,18 @@ const CONSUMER_MAIL: ReadonlySet<string> = new Set([
     // A newswire's media-contact aliases: `<number>@email4pr.com` forwards to one person at whichever firm issued the
     // release, so the domain is thousands of firms', none of them its own (433 people under one company, 2026-11).
     'email4pr.com',
+    // Providers at one exact domain each: the same word at another suffix is a firm's (`proton.com` makes cars,
+    // `pm.gc.ca` is a government office).
+    'proton.me',
+    'pm.me',
+    'me.com',
+    'mac.com',
+    'msn.com',
+    'hey.com',
+    'tuta.com',
+    'tuta.io',
+    'zoho.com',
+    'zohomail.com',
     // Anyone's
     'email.com',
     'duck.com',
@@ -100,7 +121,7 @@ const CONSUMER_MAIL: ReadonlySet<string> = new Set([
 
 export function isFreeMailDomain(domain: string): boolean {
     const bare = domain.trim().toLowerCase();
-    return FREE_MAIL.test(bare) || CONSUMER_MAIL.has(bare);
+    return FREE_MAIL.test(bare) || WORD_FREE_MAIL.test(bare) || CONSUMER_MAIL.has(bare);
 }
 
 /** The bare domain an address is at when it can be a company's; null for free mail or no domain. */
