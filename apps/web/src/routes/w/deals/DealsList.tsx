@@ -50,6 +50,8 @@ export interface DealsListProps {
     onBulkAssign: (ids: string[]) => void;
     /** Exports these deals — one request with an `id in` filter (P1-4a). */
     onBulkExport: (ids: string[]) => void;
+    /** Opens the page's delete dialog for these deals (#416): to Trash, with a reason. */
+    onBulkDelete: (ids: string[]) => void;
     /** Opens the deal's record drawer (a row's name, a tap on a phone card). */
     onOpen: (deal: OpportunityView) => void;
     /** Opens the board's Move-to-stage sheet for a deal — how a phone card moves it. */
@@ -81,6 +83,7 @@ export function DealsList({
     onMove,
     onBulkAssign,
     onBulkExport,
+    onBulkDelete,
     onOpen,
     onMoveSheet,
     stacked,
@@ -264,7 +267,7 @@ export function DealsList({
         });
 
     const bulkBar = selected.size > 0 && canBulk && (
-        <BulkBar count={selected.size} onDiscard={() => setSelected(new Set())}>
+        <BulkBar count={selected.size} onDiscard={() => setSelected(new Set())} discardLabel="Clear">
             <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                     <BulkBarAction disabled={!canMove}>Move to stage</BulkBarAction>
@@ -287,6 +290,15 @@ export function DealsList({
                 Assign owner
             </BulkBarAction>
             <BulkBarAction onClick={() => onBulkExport([...selected])}>Export selected</BulkBarAction>
+            <BulkBarAction
+                disabled={!canEdit}
+                onClick={() => {
+                    onBulkDelete([...selected]);
+                    setSelected(new Set());
+                }}
+            >
+                Delete
+            </BulkBarAction>
         </BulkBar>
     );
 

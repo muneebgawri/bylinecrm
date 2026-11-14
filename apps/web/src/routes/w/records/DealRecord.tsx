@@ -14,11 +14,12 @@ import {
     StageProgress,
     cn,
     focusRing,
+    toast,
 } from '@bylinecrm/ui';
 import { LOST_REASON_LABELS, LOST_REASONS, type LostReason } from '@bylinecrm/shared';
-import { ListTodo, Mail, StickyNote, History, UserRound } from 'lucide-react';
+import { ListTodo, Mail, StickyNote, History, Trash2, UserRound } from 'lucide-react';
 import { useId, useMemo, useRef, useState } from 'react';
-import { Link } from 'react-router';
+import { Link, useLocation, useNavigate } from 'react-router';
 import { useDealHistory, useMoveDeal, usePipeline } from '../../../api/deals';
 import { usePatchRecord, useRecord } from '../../../api/records';
 import type { OpportunityView, StageView } from '../../../api/types';
@@ -33,6 +34,8 @@ import { RecordCompose, type RecordComposeHandle } from '../mail/RecordCompose';
 import { AttachmentsPanel } from './AttachmentsPanel';
 import { InlineSelect, InlineText, messageFor } from './InlineEdit';
 import { LostReasonSelect } from '../deals/LostReasonSelect';
+import { DeleteRecordsDialog } from '../lists/ListDialogs';
+import { withOpen } from './targets';
 import { InvoicesPanel } from './InvoicesPanel';
 import { NotesPanel } from './NotesPanel';
 import { personName, sourceLabel } from './PersonRecord';
@@ -70,6 +73,14 @@ export function DealRecord({
     const createCompany = useCompanyCreator(workspaceId, contact.data?.emails.primary);
     const [notesOpen, setNotesOpen] = useState(false);
     const [tasksOpen, setTasksOpen] = useState(false);
+    const [deleting, setDeleting] = useState(false);
+    const navigate = useNavigate();
+    const location = useLocation();
+    /** Once the deal is in Trash: the page goes back to the deals, the drawer closes over its list. */
+    const leave = () =>
+        layout === 'page'
+            ? navigate(paths.deals(workspaceId))
+            : navigate({ pathname: location.pathname, search: withOpen(location.search, null) });
     const [closing, setClosing] = useState<StageView | null>(null);
     const compose = useRef<RecordComposeHandle>(null);
     const ownerId = useId();
@@ -359,6 +370,15 @@ export function DealRecord({
             reason: edit.reason || undefined,
             hint: 'Add a task (t)',
         },
+        {
+            id: 'delete',
+            label: 'Delete',
+            short: 'Delete',
+            icon: <Trash2 aria-hidden />,
+            onSelect: () => setDeleting(true),
+            disabled: !edit.allowed,
+            reason: edit.reason || undefined,
+        },
     ];
 
     return (
@@ -508,6 +528,19 @@ export function DealRecord({
                             { onSuccess: () => setClosing(null) },
                         )
                     }
+                />
+            )}
+            {deleting && (
+                <DeleteRecordsDialog
+                    workspaceId={workspaceId}
+                    object="opportunity"
+                    ids={[deal.id]}
+                    onOpenChange={(o) => !o && setDeleting(false)}
+                    onDone={(summary, deleted) => {
+                        setDeleting(false);
+                        toast(summary);
+                        if (deleted) void leave();
+                    }}
                 />
             )}
         </RecordLayout>

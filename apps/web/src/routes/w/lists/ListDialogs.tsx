@@ -14,10 +14,17 @@ import {
     SelectItem,
     SelectTrigger,
     SelectValue,
+    Textarea,
     type ToastInput,
     toast,
 } from '@bylinecrm/ui';
-import { companyDomainOfAddress, type RecordObject } from '@bylinecrm/shared';
+import {
+    companyDomainOfAddress,
+    DELETE_NOTE_MAX,
+    DELETE_REASONS,
+    type DeleteReason,
+    type RecordObject,
+} from '@bylinecrm/shared';
 import { useId, useState, type FormEvent } from 'react';
 import { ApiError } from '../../../api/client';
 import { usePipelines } from '../../../api/deals';
@@ -32,7 +39,9 @@ import type {
 } from '../../../api/types';
 import { RecordPicker } from '../../../components/RecordPicker';
 import { useCan } from '../../../auth/capabilities';
+import { DELETE_REASON_LABEL } from '../../../lib/deleteReasons';
 import { failureText } from '../../../lib/errors';
+import { ConfirmDialog } from '../../../components/ConfirmDialog';
 import { linkTo, TEXT_TYPES } from '../records/PropertiesColumn';
 import { LIST_COPY, type ListObject } from './listConfig';
 
@@ -126,6 +135,75 @@ export function SaveViewDialog({
 }
 
 /** Assigns an owner to the chosen records in one bulk request; the API reports rows it would not change. */
+/**
+ * Deletes records — people, companies or deals, from a list's bulk bar or a record page (#416) — in one place: the
+ * reason is required, a note optional, both kept with the records in Trash, where they can be restored. One bulk
+ * request; `onDone` gets the toast to show, success or refusal.
+ */
+export function DeleteRecordsDialog<O extends RecordObject>({
+    workspaceId,
+    object,
+    ids,
+    onOpenChange,
+    onDone,
+}: {
+    workspaceId: string;
+    object: O;
+    ids: readonly string[];
+    onOpenChange: (open: boolean) => void;
+    onDone: (summary: ToastInput, deleted: boolean) => void;
+}) {
+    const [reason, setReason] = useState<DeleteReason | ''>('');
+    const [note, setNote] = useState('');
+    const change = useBulkChange(workspaceId, object);
+    const copy = LIST_COPY[object];
+    const submit = async () => {
+        if (!reason) return;
+        try {
+            const trimmed = note.trim();
+            const result = await change.mutateAsync({
+                action: 'delete',
+                ids: [...ids],
+                reason,
+                ...(trimmed ? { note: trimmed } : {}),
+            });
+            onDone(bulkSummary('Deleted', copy, result), result.succeeded > 0);
+        } catch (error) {
+            onDone({ title: 'Nothing was deleted', description: failureText(error), tone: 'danger' }, false);
+        }
+    };
+    return (
+        <ConfirmDialog
+            open
+            onOpenChange={onOpenChange}
+            title={ids.length === 1 ? `Delete this ${copy.singular}?` : `Delete ${ids.length} ${copy.plural}?`}
+            body="Delete what is not a lead at all. They move to Trash, where they can be restored. A real lead you no longer work is better released from its Owner field, so someone else can have it."
+            confirm="Delete"
+            pending={change.isPending}
+            confirmDisabled={reason === ''}
+            onConfirm={() => void submit()}
+        >
+            <Field label="Why" required>
+                <Select value={reason} onValueChange={(v) => setReason(v as DeleteReason)}>
+                    <SelectTrigger aria-label="Why">
+                        <SelectValue placeholder="Choose a reason" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        {DELETE_REASONS.map((r) => (
+                            <SelectItem key={r} value={r}>
+                                {DELETE_REASON_LABEL[r]}
+                            </SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
+            </Field>
+            <Field label="Note (optional)">
+                <Textarea value={note} maxLength={DELETE_NOTE_MAX} onChange={(e) => setNote(e.target.value)} />
+            </Field>
+        </ConfirmDialog>
+    );
+}
+
 export function AssignOwnerDialog<O extends RecordObject>({
     workspaceId,
     object,
