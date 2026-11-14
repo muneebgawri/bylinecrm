@@ -1,13 +1,4 @@
-import {
-    DELETE_NOTE_MAX,
-    DELETE_REASONS,
-    ID_FIELD,
-    LIST_LIMIT_DEFAULT,
-    SEQUENCE_LIMITS,
-    type DeleteReason,
-    type ViewColumn,
-    type ViewSort,
-} from '@bylinecrm/shared';
+import { ID_FIELD, LIST_LIMIT_DEFAULT, SEQUENCE_LIMITS, type ViewColumn, type ViewSort } from '@bylinecrm/shared';
 import {
     BulkBar,
     BulkBarAction,
@@ -15,16 +6,9 @@ import {
     cn,
     DataTableChrome,
     EmptyState,
-    Field,
     LoadingRegion,
     PageHeader,
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
     Skeleton,
-    Textarea,
     toast,
     useIsMobile,
 } from '@bylinecrm/ui';
@@ -32,10 +16,9 @@ import { Building2, Plus, Search, Trash2, Upload, Users } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router';
 import { useCustomFields, useMembersById, useViews } from '../../../api/records';
-import { useBulkChange, useRecordPages, useViewCounts, type ListCount } from '../../../api/lists';
+import { useRecordPages, useViewCounts, type ListCount } from '../../../api/lists';
 import { companies as companiesApi, people as peopleApi } from '../../../api/records';
 import { useCan, useMembership, usePermission } from '../../../auth/capabilities';
-import { DELETE_REASON_LABEL } from '../../../lib/deleteReasons';
 import { useDebounced } from '../../../lib/useDebounced';
 import { useKeyedState } from '../../../lib/useKeyedState';
 import { saveFile } from '../../../lib/saveFile';
@@ -44,7 +27,7 @@ import { CREATE_LEAD, CREATE_PARAM, paths } from '../../paths';
 import { withOpen } from '../records/targets';
 import { EnrolDialog, enrolSummary, type EnrolPerson } from '../sequences/EnrolDialog';
 import { ListCards } from './ListCards';
-import { AssignOwnerDialog, bulkSummary, ConfirmDialog, CreateRecordDialog, failureText } from './ListDialogs';
+import { AssignOwnerDialog, CreateRecordDialog, DeleteRecordsDialog, failureText } from './ListDialogs';
 import {
     allColumns,
     IDENTITY_FIELD,
@@ -169,14 +152,6 @@ function RecordListPage<O extends ListObject>({ object }: { object: O }) {
     const enrol = useCan('sequence:enrol');
     const [enrolling, setEnrolling] = useState<EnrolPerson[] | null>(null);
     const [deleting, setDeleting] = useState<string[] | null>(null);
-    /** Why the records are deleted: chosen before the delete is sent, shown in the trash. */
-    const [deleteReason, setDeleteReason] = useState<DeleteReason | ''>('');
-    const [deleteNote, setDeleteNote] = useState('');
-    const closeDelete = () => {
-        setDeleting(null);
-        setDeleteReason('');
-        setDeleteNote('');
-    };
     /** The "new" dialog from the list's own button. */
     const [adding, setCreating] = useState(false);
     // `?create=1` / `?create=lead` (the nav's "Add person" / "Add lead", ⌘K) opens it as well, as the deals page does:
@@ -201,7 +176,6 @@ function RecordListPage<O extends ListObject>({ object }: { object: O }) {
         if (createParam !== null)
             navigate({ pathname: location.pathname, search: searchWithoutCreate() }, { replace: true });
     };
-    const bulk = useBulkChange(workspaceId, object);
 
     const open = useCallback(
         (row: ListRow<O>, fullPage: boolean) => {
@@ -234,23 +208,6 @@ function RecordListPage<O extends ListObject>({ object }: { object: O }) {
     const filtered = filter !== null || state.q !== '';
     const loading = pages.isPending;
     const empty = !loading && !pages.isError && rows.length === 0;
-
-    const removeIds = async (ids: string[]) => {
-        try {
-            const note = deleteNote.trim();
-            const result = await bulk.mutateAsync({
-                action: 'delete',
-                ids,
-                ...(deleteReason ? { reason: deleteReason } : {}),
-                ...(note ? { note } : {}),
-            });
-            toast(bulkSummary('Deleted', copy, result));
-        } catch (error) {
-            toast({ title: 'Nothing was deleted', description: failureText(error), tone: 'danger' });
-        }
-        closeDelete();
-        clearSelection();
-    };
 
     const api = object === 'person' ? peopleApi : companiesApi;
     const exportColumns = columns.flatMap((c) => c.column.exportFields).join(',');
@@ -563,42 +520,19 @@ function RecordListPage<O extends ListObject>({ object }: { object: O }) {
                     }}
                 />
             )}
-            <ConfirmDialog
-                open={deleting !== null}
-                onOpenChange={(o) => !o && closeDelete()}
-                title={
-                    deleting?.length === 1
-                        ? `Delete this ${copy.singular}?`
-                        : `Delete ${deleting?.length ?? 0} ${copy.plural}?`
-                }
-                body="Delete what is not a lead at all. They move to Trash, where they can be restored. A real lead you no longer work is better released from its Owner field, so someone else can have it."
-                confirm="Delete"
-                pending={bulk.isPending}
-                confirmDisabled={deleteReason === ''}
-                onConfirm={() => deleting && void removeIds(deleting)}
-            >
-                <Field label="Why" required>
-                    <Select value={deleteReason} onValueChange={(v) => setDeleteReason(v as DeleteReason)}>
-                        <SelectTrigger aria-label="Why">
-                            <SelectValue placeholder="Choose a reason" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            {DELETE_REASONS.map((r) => (
-                                <SelectItem key={r} value={r}>
-                                    {DELETE_REASON_LABEL[r]}
-                                </SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
-                </Field>
-                <Field label="Note (optional)">
-                    <Textarea
-                        value={deleteNote}
-                        maxLength={DELETE_NOTE_MAX}
-                        onChange={(e) => setDeleteNote(e.target.value)}
-                    />
-                </Field>
-            </ConfirmDialog>
+            {deleting && (
+                <DeleteRecordsDialog
+                    workspaceId={workspaceId}
+                    object={object}
+                    ids={deleting}
+                    onOpenChange={(o) => !o && setDeleting(null)}
+                    onDone={(summary) => {
+                        setDeleting(null);
+                        clearSelection();
+                        toast(summary);
+                    }}
+                />
+            )}
             {creating && (
                 <CreateRecordDialog
                     workspaceId={workspaceId}

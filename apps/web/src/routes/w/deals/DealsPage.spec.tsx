@@ -547,6 +547,37 @@ describe('DealsPage', { timeout: 20_000 }, () => {
         expect(await screen.findByText('Assigned 1 deal · 1 already was')).toBeInTheDocument();
     });
 
+    it('#416: deletes selected deals to Trash with one bulk request, once a reason is chosen', async () => {
+        stubApi(() => new Response('{}', { status: 200 }));
+        const user = userEvent.setup();
+        renderPage(ALL, `/w/${WS}/deals?show=list`);
+        await screen.findByRole('columnheader', { name: /Deal/ }, { timeout: FIRST_RENDER_MS });
+        await user.click(screen.getByRole('checkbox', { name: 'Select Product PR' }));
+        // The bar's other button only clears the selection, and says so.
+        expect(screen.getByRole('button', { name: 'Clear' })).toBeInTheDocument();
+        await user.click(screen.getByRole('button', { name: 'Delete' }));
+        const confirm = await screen.findByRole('dialog', { name: 'Delete this deal?' });
+        expect(within(confirm).getByRole('button', { name: 'Delete' })).toBeDisabled();
+        await user.click(within(confirm).getByRole('combobox', { name: 'Why' }));
+        await user.click(await screen.findByRole('option', { name: 'Not a lead' }));
+        await user.click(within(confirm).getByRole('button', { name: 'Delete' }));
+        await waitFor(() => expect(posts).toHaveLength(1));
+        expect(posts[0]).toEqual({
+            url: `/api/w/${WS}/opportunities/bulk`,
+            body: { action: 'delete', ids: ['d-2'], reason: 'not_a_lead' },
+        });
+        expect(await screen.findByText('Deleted 1 deal')).toBeInTheDocument();
+    });
+
+    it('#416: Delete is unavailable without deal:edit', async () => {
+        stubApi(() => new Response('{}', { status: 200 }));
+        const user = userEvent.setup();
+        renderPage(['deal:read', 'deal:move', 'deal:bulk'], `/w/${WS}/deals?show=list`);
+        await screen.findByRole('columnheader', { name: /Deal/ }, { timeout: FIRST_RENDER_MS });
+        await user.click(screen.getByRole('checkbox', { name: 'Select Product PR' }));
+        expect(screen.getByRole('button', { name: 'Delete' })).toBeDisabled();
+    });
+
     it('exports selected deals with one request whose filter names the ids', async () => {
         stubApi(() => new Response('{}', { status: 200 }));
         vi.stubGlobal('URL', Object.assign(URL, { createObjectURL: () => 'blob:x', revokeObjectURL: () => {} }));

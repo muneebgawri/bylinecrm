@@ -39,7 +39,7 @@ import { useRegisterCommands } from '../../../commands/registry';
 import { useWorkspaceId } from '../../params';
 import { paths } from '../../paths';
 import { withOpen } from '../records/targets';
-import { AssignOwnerDialog, failureText } from '../lists/ListDialogs';
+import { AssignOwnerDialog, DeleteRecordsDialog, failureText } from '../lists/ListDialogs';
 import { allColumns, IDENTITY_FIELD, isSortable, resolveColumns } from '../lists/listConfig';
 import { ListToolbar, useFilterFields } from '../lists/ListToolbar';
 import { formatSort, useListState } from '../lists/useListState';
@@ -83,6 +83,7 @@ export function DealsPage() {
     const location = useLocation();
     const [moving, setMoving] = useState<OpportunityView | null>(null);
     const [assigning, setAssigning] = useState<string[] | null>(null);
+    const [deleting, setDeleting] = useState<string[] | null>(null);
     // A phone keeps view, search, filter, sort, export and the pipeline link in one sheet (FR-CRMS-UI-12).
     const [filtersOpen, setFiltersOpen] = useState(false);
 
@@ -459,6 +460,7 @@ export function DealsPage() {
                     onMove={move.request}
                     onBulkAssign={setAssigning}
                     onBulkExport={(ids) => void exportDeals(ids)}
+                    onBulkDelete={setDeleting}
                     onOpen={openDeal}
                     onMoveSheet={setMoving}
                     stacked={mobile}
@@ -494,6 +496,18 @@ export function DealsPage() {
                     onOpenChange={(o) => !o && setAssigning(null)}
                     onDone={(summary) => {
                         setAssigning(null);
+                        toast(summary);
+                    }}
+                />
+            )}
+            {deleting && (
+                <DeleteRecordsDialog
+                    workspaceId={workspaceId}
+                    object="opportunity"
+                    ids={deleting}
+                    onOpenChange={(o) => !o && setDeleting(null)}
+                    onDone={(summary) => {
+                        setDeleting(null);
                         toast(summary);
                     }}
                 />
