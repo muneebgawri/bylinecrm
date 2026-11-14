@@ -124,6 +124,21 @@ describe('unlink-relay-companies: a domain that names no company makes none', ()
         expect(parseArgs(['acme', '--apply'])).toEqual({ slug: 'acme', apply: true });
         expect(parseArgs(['acme'])).toBeNull();
         expect(parseArgs(['acme', '--apply', '--estimate'])).toBeNull();
+        expect(parseArgs(['acme', '--estimate', '--domain', 'Email4PR.com'])).toEqual({
+            slug: 'acme',
+            apply: false,
+            domain: 'email4pr.com',
+        });
+        expect(parseArgs(['acme', '--apply', '--domain'])).toBeNull();
+    });
+
+    it('keeps to one domain when asked: the other relay company is not touched', async () => {
+        expect(await unlinkRelayCompanies(app, workspace, { apply: false, domain: 'email4pr.com' })).toEqual({
+            companies: 1,
+            people: 3,
+            trashed: 0,
+            keptForDeals: 0,
+        });
     });
 
     it('estimates without writing', async () => {
