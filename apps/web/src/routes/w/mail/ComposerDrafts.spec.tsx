@@ -58,7 +58,11 @@ async function write(subject: string, body: string) {
 
 afterEach(() => vi.unstubAllGlobals());
 
-describe('Cc and Bcc: anyone, by address or as a person', () => {
+// These type into the editor key by key and wait out the real save delay, sometimes twice (2 × 2s): the
+// default 5s left too little room on a busy CI runner.
+const SLOW = { timeout: 20_000 };
+
+describe('Cc and Bcc: anyone, by address or as a person', SLOW, () => {
     it('takes a typed address no one in the CRM has, behind the Cc/Bcc toggle, and sends it as cc', async () => {
         const seen = composer([sendRoute], false);
         await write('Hello', 'Hi Dana');
@@ -96,7 +100,7 @@ describe('Cc and Bcc: anyone, by address or as a person', () => {
     });
 });
 
-describe('drafts: saved as you write, on leaving, and put back', () => {
+describe('drafts: saved as you write, on leaving, and put back', SLOW, () => {
     it('saves a moment after typing, then saves changes over the version it has', async () => {
         let version = 0;
         const seen = composer([
@@ -230,7 +234,7 @@ describe('drafts: saved as you write, on leaving, and put back', () => {
     });
 });
 
-describe('Discard on the record’s activity', () => {
+describe('Discard on the record’s activity', SLOW, () => {
     it('discards the draft open in the composer: the composer empties and does not save it back', async () => {
         const saved = mailDraft({ content: { subject: 'Second thoughts', body: doc('Maybe not') } });
         let deleted = false;
