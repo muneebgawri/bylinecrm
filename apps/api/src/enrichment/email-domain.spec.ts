@@ -19,6 +19,35 @@ describe('FR-CRMS-15 the email-addresses source', () => {
         expect(isFreeMailDomain('acme.example')).toBe(false);
     });
 
+    it('reads a provider named by an ordinary word as free mail only at its own domains', () => {
+        // A distinctive provider's name is its own under any suffix, a mistyped one included.
+        for (const domain of [
+            'gmail.con',
+            'yahoo.comm',
+            'aol.co.uk',
+            'gmx.ch',
+            'live.co.uk',
+            'mail.ru',
+            'pm.me',
+            'me.com',
+        ]) {
+            expect(isFreeMailDomain(domain), domain).toBe(true);
+        }
+        // The same word elsewhere is a firm's.
+        for (const domain of [
+            'proton.com',
+            'proton.energy',
+            'pm.gc.ca',
+            'pm.bet',
+            'mail.schwarz',
+            'live.events',
+            'hey.agency',
+        ]) {
+            expect(isFreeMailDomain(domain), domain).toBe(false);
+        }
+        expect(companyDomainOfAddress('dana@proton.energy')).toBe('proton.energy');
+    });
+
     it('knows the consumer mailboxes a provider hands out, by their exact domain', () => {
         for (const domain of ['comcast.net', 'verizon.net', 'btinternet.com', 'qq.com', '163.com', 'naver.com']) {
             expect(isFreeMailDomain(domain), domain).toBe(true);
