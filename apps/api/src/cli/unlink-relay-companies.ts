@@ -10,7 +10,7 @@ import { CompaniesService } from '../records/companies.service';
 import { PeopleService } from '../records/people.service';
 import { importJobContext, JOB_WRITE_CHUNK, quietWorkers } from './job-common';
 
-const USAGE = 'usage: node dist/cli/unlink-relay-companies.js <workspace-slug> --estimate|--apply';
+const USAGE = 'usage: node dist/cli/unlink-relay-companies.js <workspace-slug> --estimate|--apply [--domain <domain>]';
 
 export interface UnlinkReport {
     /** Live companies whose own domain names no company (free mail, a consumer provider, a service's relay). */
@@ -33,7 +33,7 @@ export interface UnlinkReport {
 export async function unlinkRelayCompanies(
     app: INestApplicationContext,
     workspaceId: string,
-    options: { apply: boolean; onProgress?: (line: string) => void },
+    options: { apply: boolean; domain?: string | undefined; onProgress?: (line: string) => void },
 ): Promise<UnlinkReport> {
     const rls = app.get(RlsPrismaService);
     const people = app.get(PeopleService);
@@ -48,7 +48,12 @@ export async function unlinkRelayCompanies(
                 select: { id: true, domain: true },
             }),
         )
-    ).filter((c) => c.domain !== null && isFreeMailDomain(c.domain));
+    ).filter(
+        (c) =>
+            c.domain !== null &&
+            isFreeMailDomain(c.domain) &&
+            (options.domain === undefined || c.domain === options.domain.trim().toLowerCase()),
+    );
     report.companies = candidates.length;
     for (const company of candidates) {
         const ids = (
@@ -86,12 +91,32 @@ export async function unlinkRelayCompanies(
     return report;
 }
 
-export function parseArgs(args: readonly string[]): { slug: string; apply: boolean } | null {
-    const [slug, flag, ...rest] = args;
-    if (!slug || slug.startsWith('--') || rest.length > 0) return null;
-    if (flag === '--estimate') return { slug, apply: false };
-    if (flag === '--apply') return { slug, apply: true };
-    return null;
+/**
+ * The flags of a run, or `null` when they do not read. `--domain` keeps the run to the companies at that one domain:
+ * a company at a free-mail domain may be a real firm whose domain was set wrong, so each domain is a decision.
+ */
+export function parseArgs(
+    args: readonly string[],
+): { slug: string; apply: boolean; domain?: string | undefined } | null {
+    const [slug, ...flags] = args;
+    if (!slug || slug.startsWith('--')) return null;
+    let apply: boolean | undefined;
+    let domain: string | undefined;
+    for (let i = 0; i < flags.length; i++) {
+        const flag = flags[i];
+        if (flag === '--estimate' || flag === '--apply') {
+            if (apply !== undefined) return null;
+            apply = flag === '--apply';
+        } else if (flag === '--domain') {
+            const value = flags[++i];
+            if (!value || value.startsWith('--') || domain !== undefined) return null;
+            domain = value.toLowerCase();
+        } else {
+            return null;
+        }
+    }
+    if (apply === undefined) return null;
+    return domain === undefined ? { slug, apply } : { slug, apply, domain };
 }
 
 /**
@@ -110,6 +135,7 @@ async function main(): Promise<void> {
         if (!workspace) throw new Error(`no workspace ${parsed.slug}`);
         const r = await unlinkRelayCompanies(app, workspace.id, {
             apply: parsed.apply,
+            domain: parsed.domain,
             onProgress: (line) => console.error(line),
         });
         const verb = parsed.apply ? 'took' : 'would take';
